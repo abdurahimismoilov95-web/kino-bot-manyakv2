@@ -1,6 +1,5 @@
 # =============================================================================
 #  MANYAK TV v2 — Render.com Blueprint
-#  Render Dashboard → New → Blueprint → repo ni tanlang
 # =============================================================================
 
 databases:
@@ -20,14 +19,15 @@ services:
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
-  # ─── NestJS Backend API
+  # ─── NestJS Backend (Node runtime — Dockerfile shart emas)
   - type: web
     name: manyaktv-api
-    runtime: docker
+    runtime: node
     region: frankfurt
     plan: free
     rootDir: manyaktv-v2/apps/api
-    dockerfilePath: ./Dockerfile
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main
     healthCheckPath: /health
     autoDeploy: true
     envVars:
