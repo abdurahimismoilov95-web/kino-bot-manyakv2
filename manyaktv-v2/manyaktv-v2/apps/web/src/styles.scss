@@ -1,0 +1,353 @@
+/* ============================================================
+   MANYAK TV v2 - Global Styles
+   Tailwind CSS base + custom overrides
+   ============================================================ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Anti-piracy: disable text selection & context menu */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+video {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:root {
+  --color-bg:       #0f0f0f;
+  --color-surface:  #1a1a1a;
+  --color-surface2: #242424;
+  --color-red:      #e50914;
+  --color-text:     #ffffff;
+  --color-muted:    rgba(255,255,255,0.45);
+  --color-border:   rgba(255,255,255,0.08);
+  --nav-height:     68px;
+  --safe-bottom:    env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  overscroll-behavior: none;
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+/* Content Card */
+.content-card {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-surface);
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.content-card:hover { transform: scale(1.03); }
+.content-card img {
+  width: 100%; aspect-ratio: 2/3;
+  object-fit: cover; display: block;
+}
+.content-card .card-info {
+  padding: 8px;
+}
+.content-card .card-title {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.content-card .card-meta {
+  font-size: 11px; color: var(--color-muted);
+}
+.content-card .vip-badge {
+  position: absolute; top: 6px; left: 6px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000; font-size: 9px; font-weight: 800;
+  padding: 2px 6px; border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Hero Slider */
+.hero-slider {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+}
+.hero-slide {
+  position: absolute; inset: 0;
+  transition: opacity 0.6s ease;
+}
+.hero-slide img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.hero-slide .hero-gradient {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 60%;
+  background: linear-gradient(transparent, rgba(15,15,15,0.95));
+}
+.hero-slide .hero-info {
+  position: absolute; bottom: 16px; left: 16px; right: 16px;
+}
+.hero-slide .hero-title {
+  font-size: 22px; font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* Section titles */
+.section-title {
+  font-size: 18px; font-weight: 700;
+  margin: 20px 16px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* Grid layouts */
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 12px;
+}
+.content-row {
+  display: flex; gap: 10px;
+  overflow-x: auto; padding: 0 12px;
+  scrollbar-width: none;
+}
+.content-row::-webkit-scrollbar { display: none; }
+.content-row .content-card { flex: 0 0 120px; }
+
+/* Page layout */
+.page { padding-bottom: calc(var(--nav-height) + var(--safe-bottom)); }
+.page-header {
+  padding: 16px;
+  font-size: 22px; font-weight: 800;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 12px 24px;
+  border-radius: 8px; font-size: 15px; font-weight: 600;
+  border: none; transition: all 0.2s;
+}
+.btn-primary {
+  background: var(--color-red); color: #fff;
+}
+.btn-primary:hover { background: #c8000f; }
+.btn-secondary {
+  background: var(--color-surface2); color: #fff;
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: #fff;
+}
+
+/* VIP Modal */
+.vip-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.85);
+  display: flex; align-items: flex-end;
+}
+.vip-modal {
+  background: var(--color-surface);
+  border-radius: 24px 24px 0 0;
+  padding: 24px; width: 100%;
+  max-height: 85vh; overflow-y: auto;
+}
+
+/* ============================================================
+   CSS Variable aliases (component compatibility)
+   ============================================================ */
+:root {
+  /* Component'larda ishlatilgan alias'lar */
+  --bg-primary:   var(--color-bg);
+  --bg-secondary: var(--color-surface);
+  --accent:       var(--color-red);
+}
+
+/* .content-card-info — component'lar shu klassni ishlatadi */
+.content-card-info {
+  padding: 8px;
+}
+.content-card-info .title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+}
+
+/* Hero slider overlay (home.component) */
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15,15,15,0.92) 0%, rgba(15,15,15,0.3) 60%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 20px 16px;
+  gap: 6px;
+}
+
+/* Hero dots pagination */
+.hero-dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+}
+.hero-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.hero-dots span.active {
+  background: var(--color-red);
+  width: 18px;
+  border-radius: 3px;
+}
+
+/* Chip filter buttons */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-surface2);
+  color: rgba(255,255,255,0.6);
+  border: none;
+  white-space: nowrap;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--color-red);
+  color: #fff;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.7);
+}
+.badge.vip-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+}
+
+/* Load more button */
+.load-more-btn {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 16px 12px;
+  padding: 14px;
+  background: var(--color-surface2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.load-more-btn:not(:disabled):hover {
+  background: var(--color-surface);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* ============================================================
+   EKRAN TASVIRDAN HIMOYA — Screen Protection Layer
+   ============================================================ */
+
+/* 1. Print bloklash: chop etishda barcha kontent yashiriladi */
+@media print {
+  body * { visibility: hidden !important; }
+  body::after {
+    visibility: visible !important;
+    display: block;
+    content: 'MANYAK TV — Bu sahifani chop etish taqiqlangan.';
+    font-size: 24px;
+    text-align: center;
+    margin-top: 40vh;
+    color: #e50914;
+  }
+}
+
+/* 2. Video element maxsus himoyalari */
+video {
+  /* Brauzerning o'rnatilgan controls va PiP'ni yashirish */
+  pointer-events: auto;
+  /* CSS isolation: video layerini screenshot'dan ajratadi */
+  isolation: isolate;
+  /* Sahifa seleksiyasini oldini olish */
+  -webkit-user-select: none;
+  user-select:         none;
+  /* Capture API'dan himoya */
+  -webkit-user-drag: none;
+}
+
+/* 3. Player konteyner — CSS screenshot bloklash triki */
+.player-container {
+  /* Bu xususiyat ba'zi screenshot dasturlarida qora kvadrat ko'rsatadi */
+  contain: strict;
+}
+
+/* 4. Himoyalangan overlay (ScreenProtectionService inject qiladi) */
+[data-role='sc-guard'] {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  background: rgba(255,255,255,0.0001);
+}
+
+/* 5. Dinamik watermark (ScreenProtectionService inject qiladi) */
+[data-role='sc-watermark'] {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.10);
+  user-select: none;
+  transform: rotate(-30deg);
+  white-space: nowrap;
+  text-shadow: 0 0 4px rgba(0,0,0,0.3);
+  transition: top 0.8s ease, left 0.8s ease;
+}

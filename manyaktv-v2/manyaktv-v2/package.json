@@ -1,0 +1,30 @@
+{
+  "name": "manyaktv-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Manyak TV - Telegram Kino Web App v2 (NestJS + PostgreSQL + Angular + HLS)",
+  "workspaces": [
+    "apps/api",
+    "apps/bot",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:bot": "npm run dev --workspace=apps/bot",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:bot": "npm run build --workspace=apps/bot",
+    "build:web": "npm run build --workspace=apps/web",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:build": "docker compose build",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:seed": "npm run db:seed --workspace=apps/api",
+    "transcode": "bash infra/scripts/transcode-hls.sh"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": ["telegram", "web-app", "nestjs", "angular", "hls", "streaming"]
+}
