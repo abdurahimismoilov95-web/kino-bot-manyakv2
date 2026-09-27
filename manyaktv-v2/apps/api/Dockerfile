@@ -1,1 +1,31 @@
-IyDilIDilIDilIAgU3RhZ2UgMTogQnVpbGQg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACkZST00gbm9kZToyMC1hbHBpbmUgQVMgYnVpbGRlcgoKV09SS0RJUiAvYXBwCgojIEZhcWF0IHBhY2thZ2UgZmF5bGxhcm5pIG51c3hhbGFzaCAoY2FjaGUgdWNodW4pCkNPUFkgcGFja2FnZSouanNvbiAuLwpSVU4gbnBtIGluc3RhbGwgLS1sZWdhY3ktcGVlci1kZXBzCgojIE1hbmJhIGtvZGxhcm5pIG51c3hhbGFzaCB2YSBidWlsZApDT1BZIC4gLgpSVU4gbnBtIHJ1biBidWlsZAoKIyDilIDilIDilIAgU3RhZ2UgMjogUHJvZHVjdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKRlJPTSBub2RlOjIwLWFscGluZSBBUyBwcm9kdWN0aW9uCgpXT1JLRElSIC9hcHAKCiMgRmFxYXQgcHJvZHVjdGlvbiBkZXBlbmRlbmN5CkNPUFkgcGFja2FnZSouanNvbiAuLwpSVU4gbnBtIGluc3RhbGwgLS1vbWl0PWRldiAtLWxlZ2FjeS1wZWVyLWRlcHMKCiMgQnVpbGQgbmF0aWphc2luaSBudXN4YWxhc2gKQ09QWSAtLWZyb209YnVpbGRlciAvYXBwL2Rpc3QgLi9kaXN0CgojIFVwbG9hZHMgdmEgSExTIHBhcGthbGFyClJVTiBta2RpciAtcCAvdG1wL3VwbG9hZHMgL3RtcC9obHMtb3V0cHV0CgpFWFBPU0UgMTAwMDAKCkNNRCBbIm5vZGUiLCAiZGlzdC9tYWluIl0K
+# --- Stage 1: Build ---
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Faqat package fayllarni nusxalash (cache uchun)
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# Manba kodlarni nusxalash va build
+COPY . .
+RUN npm run build
+
+# --- Stage 2: Production ---
+FROM node:20-alpine AS production
+
+WORKDIR /app
+
+# Faqat production dependency
+COPY package*.json ./
+RUN npm install --omit=dev --legacy-peer-deps
+
+# Build natijasini nusxalash
+COPY --from=builder /app/dist ./dist
+
+# Uploads va HLS papkalar
+RUN mkdir -p /tmp/uploads /tmp/hls-output
+
+EXPOSE 10000
+
+CMD ["node", "dist/main"]
