@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+const TELEGRAM_API_BASE = 'https://api.telegram.org';
+
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
@@ -34,25 +36,26 @@ export class BotService {
 
   /** Telegram Bot API ga sorov yuborish */
   private async call(method: string, payload: unknown): Promise<void> {
-    if (!this.token) {
+    const token = this.token;
+    if (!token) {
       this.logger.error('TELEGRAM_BOT_TOKEN topilmadi');
       return;
     }
 
+    const url = TELEGRAM_API_BASE + '/bot' + token + '/' + method;
+
     try {
-      const res = await fetch(
-        `https://api.telegram.org/bot${this.token}/${method}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-      );
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       if (!res.ok) {
-        this.logger.warn(`${method} xato: ${res.status} ${await res.text()}`);
+        const body = await res.text();
+        this.logger.warn(method + ' xato: ' + res.status + ' ' + body);
       }
     } catch (err) {
-      this.logger.error(`${method} yuborilmadi`, err as Error);
+      this.logger.error(method + ' yuborilmadi', err as Error);
     }
   }
 
@@ -122,7 +125,9 @@ export class BotService {
     if (text.startsWith('/start')) {
       await this.sendMessage(
         chatId,
-        `Salom, <b>${name}</b>!\n\n<b>MANYAK TV</b> ga xush kelibsiz.\n\nKinolar, seriallar, anime va qisqa dramalar - hammasi bir joyda.\n\nBoshlash uchun pastdagi tugmani bosing.`,
+        'Salom, <b>' +
+          name +
+          '</b>!\n\n<b>MANYAK TV</b> ga xush kelibsiz.\n\nKinolar, seriallar, anime va qisqa dramalar - hammasi bir joyda.\n\nBoshlash uchun pastdagi tugmani bosing.',
         this.mainKeyboard(),
       );
       return;
@@ -131,7 +136,7 @@ export class BotService {
     if (text.startsWith('/help')) {
       await this.sendMessage(
         chatId,
-        '<b>Yordam</b>\n\n/start - asosiy menyu\n/help - yordam\n\nKino qidirish uchun ilovani ochib, qidiruv boliminan foydalaning.',
+        '<b>Yordam</b>\n\n/start - asosiy menyu\n/help - yordam\n\nKino qidirish uchun ilovani ochib, qidiruv bolimidan foydalaning.',
         this.mainKeyboard(),
       );
       return;
