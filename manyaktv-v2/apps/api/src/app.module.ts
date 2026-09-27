@@ -23,6 +23,12 @@ import { EventsModule } from './modules/events/events.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { HealthModule } from './modules/health/health.module';
 
+/** true/1/yes -> true */
+function envFlag(value: string | undefined, fallback = false): boolean {
+  if (value === undefined || value === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -33,31 +39,58 @@ import { HealthModule } from './modules/health/health.module';
     }),
 
     TypeOrmModule.forRootAsync({
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres' as const,
-        url: config.get<string>('database.url'),
-        autoLoadEntities: true,
-        synchronize: config.get('app.nodeEnv') !== 'production',
-        logging: config.get('app.nodeEnv') === 'development',
-        ssl: config.get<boolean>('database.ssl')
-          ? { rejectUnauthorized: false }
-          : false,
-        extra: {
-          max: 10,
-          connectionTimeoutMillis: 5000,
-          idleTimeoutMillis: 30000,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const url =
+          process.env.DATABASE_URL || config.get<string>('database.url') || '';
+
+        if (!url) {
+          throw new Error(
+            'DATABASE_URL topilmadi. Render dashboard -> manyaktv-api -> Environment ga ' +
+              'Postgres Internal Database URL ni DATABASE_URL nomi bilan qoshing.',
+          );
+        }
+
+        // Renderning tashqi (external) hosti SSL talab qiladi, internal host talab qilmaydi.
+        const needsSsl =
+          envFlag(process.env.DB_SSL) ||
+          /[.]render[.]com/.test(url) ||
+          url.includes('sslmode=require');
+
+        const isProd = (process.env.NODE_ENV || 'development') === 'production';
+
+        return {
+          type: 'postgres' as const,
+          url,
+          autoLoadEntities: true,
+          // Birinchi deployda jadvallarni yaratish uchun DB_SYNCHRONIZE=true qoyiladi.
+          synchronize: envFlag(process.env.DB_SYNCHRONIZE, !isProd),
+          logging: !isProd,
+          retryAttempts: 10,
+          retryDelay: 3000,
+          ssl: needsSsl ? { rejectUnauthorized: false } : false,
+          extra: {
+            max: Number(process.env.DB_POOL_MAX || 10),
+            connectionTimeoutMillis: 10000,
+            idleTimeoutMillis: 30000,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
 
     BullModule.forRootAsync({
-      useFactory: (config: ConfigService) => ({
-        redis: config.get<string>('app.redis.url') || {
-          host: config.get<string>('app.redis.host', 'localhost'),
-          port: config.get<number>('app.redis.port', 6379),
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const redisUrl =
+          process.env.REDIS_URL || config.get<string>('app.redis.url');
+        return redisUrl
+          ? { redis: redisUrl }
+          : {
+              redis: {
+                host: config.get<string>('app.redis.host', 'localhost'),
+                port: config.get<number>('app.redis.port', 6379),
+              },
+            };
+      },
       inject: [ConfigService],
     }),
 
