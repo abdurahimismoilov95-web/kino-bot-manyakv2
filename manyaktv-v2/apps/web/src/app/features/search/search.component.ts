@@ -1,149 +1,146 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { ApiService } from '../../core/services/api.service';
+import { StorageService } from '../../core/services/storage.service';
 
+/** manyak-tv1 SearchView.tsx dizayni */
 @Component({
   selector: 'app-search',
   template: `
-    <div class="search-page pb-20 px-4">
-      <div class="search-bar-wrap pt-4 pb-3 sticky top-0 z-10">
-        <div class="relative">
-          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg"
-            >&#128269;</span
-          >
-          <input
-            class="search-input w-full rounded-xl pl-10 pr-4 py-3 text-sm outline-none"
-            type="text"
-            placeholder="Kino, serial, anime..."
-            [(ngModel)]="query"
-            (ngModelChange)="onSearch($event)"
-          />
-          <button
-            *ngIf="query"
-            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-            (click)="clear()"
-          >
-            &#10005;
-          </button>
-        </div>
-        <div class="flex gap-2 mt-3 overflow-x-auto pb-1">
-          <button
-            *ngFor="let g of genres"
-            class="chip whitespace-nowrap"
-            [class.active]="activeGenre === g"
-            (click)="setGenre(g)"
-          >
-            {{ g }}
-          </button>
-        </div>
+    <div class="sv">
+      <div class="sv-input">
+        <span class="sv-ico">&#9906;</span>
+        <input type="text" [(ngModel)]="query"
+               placeholder="Kino, serial yoki drama qidirish..." />
+        <button class="sv-clear" *ngIf="query" (click)="query = ''">&#10005;</button>
       </div>
 
-      <div *ngIf="loading" class="text-center py-8 text-gray-400">Qidirilmoqda...</div>
-
-      <div class="content-grid" *ngIf="!loading && results.length > 0">
-        <div class="content-card" *ngFor="let item of results" (click)="open(item)">
-          <img
-            [src]="item.posterUrl || 'assets/no-poster.png'"
-            [alt]="item.title"
-            loading="lazy"
-          />
-          <div class="content-card-info">
-            <p class="title">{{ item.title }}</p>
-            <div class="flex gap-1 items-center">
-              <span class="badge" [class.vip-badge]="item.isPremium">{{
-                item.isPremium ? 'VIP' : 'Bepul'
-              }}</span>
-              <span class="text-xs text-gray-400">{{ item.year }}</span>
-            </div>
-          </div>
-        </div>
+      <div class="sv-chips">
+        <button class="sv-chip" [class.sv-on]="type === 'all'" (click)="setType('all')">Barchasi</button>
+        <button class="sv-chip" [class.sv-on]="type === 'movie'" (click)="setType('movie')">Kinolar</button>
+        <button class="sv-chip" [class.sv-on]="type === 'series'" (click)="setType('series')">Seriallar</button>
+        <button class="sv-chip" [class.sv-on]="type === 'anime_series'" (click)="setType('anime_series')">Anime</button>
+        <button class="sv-chip" [class.sv-on]="type === 'short_drama'" (click)="setType('short_drama')">Short Dramalar</button>
+        <button class="sv-chip sv-free" [class.sv-free-on]="onlyFree" (click)="onlyFree = !onlyFree">
+          &#9878; Faqat bepullar
+        </button>
       </div>
 
-      <div *ngIf="!loading && results.length === 0 && query" class="text-center py-16">
-        <p class="text-4xl mb-3">&#128247;</p>
-        <p class="text-gray-400">"{{ query }}" boyicha natija topilmadi</p>
+      <div class="sv-count">
+        Natijalar: <b>{{ filtered.length }}</b> ta kontent
       </div>
 
-      <div *ngIf="!query" class="text-center py-16">
-        <p class="text-4xl mb-3">&#128269;</p>
-        <p class="text-gray-400">Kino yoki serial nomini kiriting</p>
+      <app-skeleton-card *ngIf="loading" variant="grid" [count]="9"></app-skeleton-card>
+
+      <div class="sv-empty" *ngIf="!loading && !filtered.length">
+        <div class="sv-empty-ico">&#9634;</div>
+        <h4>Hech qanday film topilmadi</h4>
+        <p>Boshqa soz bilan qidirib koring</p>
+      </div>
+
+      <div class="sv-grid" *ngIf="!loading && filtered.length">
+        <app-content-card *ngFor="let item of filtered"
+                          [item]="item" [hasAccess]="isVip" variant="grid"
+                          (click)="open(item)"></app-content-card>
       </div>
     </div>
   `,
-  styles: [
-    `
-      .search-bar-wrap {
-        background: var(--bg-primary);
-      }
-      .search-input {
-        background: var(--bg-secondary);
-        color: #fff;
-        border: none;
-      }
-    `,
-  ],
+  styles: [`
+    .sv { padding: 16px 14px 110px; background: #0f0f0f; min-height: 100dvh; }
+    .sv-input { position: relative; }
+    .sv-input input {
+      width: 100%; background: rgba(24,24,27,0.92);
+      border: 1px solid rgba(63,63,70,0.8); border-radius: 16px;
+      padding: 13px 40px 13px 38px; font-size: 13.5px; color: #fff;
+      outline: none; box-shadow: 0 8px 22px rgba(0,0,0,0.4);
+      transition: border-color 0.2s;
+    }
+    .sv-input input::placeholder { color: #71717a; }
+    .sv-input input:focus { border-color: #dc2626; }
+    .sv-ico {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      color: #a1a1aa; font-size: 14px;
+    }
+    .sv-clear {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 22px; height: 22px; border-radius: 50%; border: none;
+      background: #27272a; color: #a1a1aa; font-size: 11px; cursor: pointer;
+    }
+    .sv-chips {
+      display: flex; align-items: center; gap: 8px; margin-top: 14px;
+      overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;
+    }
+    .sv-chips::-webkit-scrollbar { display: none; }
+    .sv-chip {
+      flex-shrink: 0; padding: 7px 13px; border-radius: 12px;
+      font-size: 12px; font-weight: 800; white-space: nowrap; cursor: pointer;
+      background: #18181b; color: #a1a1aa; border: 1px solid #27272a;
+      transition: all 0.2s;
+    }
+    .sv-on { background: #dc2626; color: #fff; border-color: transparent; }
+    .sv-free-on { background: #059669; color: #fff; border-color: transparent; }
+    .sv-count { margin-top: 14px; font-size: 12px; color: #a1a1aa; }
+    .sv-count b { color: #fff; }
+    .sv-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px; margin-top: 14px;
+    }
+    @media (max-width: 360px) { .sv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .sv-empty { text-align: center; padding: 60px 0; }
+    .sv-empty-ico { font-size: 34px; color: #3f3f46; }
+    .sv-empty h4 { margin: 10px 0 0; font-size: 14px; font-weight: 800; color: #d4d4d8; }
+    .sv-empty p { margin: 4px 0 0; font-size: 12px; color: #71717a; }
+  `],
 })
-export class SearchComponent {
+export class SearchComponent implements OnInit {
   query = '';
-  results: any[] = [];
-  loading = false;
-  activeGenre = 'Barchasi';
-
-  genres = [
-    'Barchasi',
-    'Drama',
-    'Komediya',
-    'Triller',
-    'Jangovar',
-    'Romantik',
-    'Animatsiya',
-    'Qorqinch',
-    'Fantastika',
-  ];
-
-  private searchSubject = new Subject<string>();
+  type: string = 'all';
+  onlyFree = false;
+  loading = true;
+  isVip = false;
+  all: any[] = [];
 
   constructor(
-    private api: ApiService,
-    private router: Router,
-  ) {
-    this.searchSubject
-      .pipe(
-        debounceTime(400),
-        distinctUntilChanged(),
-        switchMap((q) => {
-          this.loading = true;
-          const genre = this.activeGenre !== 'Barchasi' ? this.activeGenre : undefined;
-          return this.api.getContent({ search: q, genre, limit: 40, page: 1 });
-        }),
-      )
-      .subscribe({
-        next: (r: any) => {
-          this.results = r.data;
-          this.loading = false;
-        },
-        error: () => (this.loading = false),
-      });
+    private readonly api: ApiService,
+    private readonly router: Router,
+    private readonly storage: StorageService,
+  ) {}
+
+  get filtered(): any[] {
+    const q = this.query.trim().toLowerCase();
+    return this.all.filter((item) => {
+      if (this.type !== 'all' && item.type !== this.type) { return false; }
+      if (this.onlyFree && (item.isPremium || item.isVipOnly)) { return false; }
+      if (!q) { return true; }
+      const title = (item.title || '').toLowerCase();
+      const orig = (item.originalTitle || '').toLowerCase();
+      const desc = (item.description || '').toLowerCase();
+      const genres: string[] = Array.isArray(item.genres) ? item.genres : [];
+      return (
+        title.indexOf(q) >= 0 ||
+        orig.indexOf(q) >= 0 ||
+        desc.indexOf(q) >= 0 ||
+        genres.some((g) => (g || '').toLowerCase().indexOf(q) >= 0)
+      );
+    });
   }
 
-  onSearch(q: string) {
-    if (q.trim()) this.searchSubject.next(q.trim());
-    else this.results = [];
+  ngOnInit(): void {
+    const u = this.storage.getUser();
+    if (u) { this.isVip = !!u.isVip; }
+    this.api.getContent({ page: 1, limit: 100 }).subscribe({
+      next: (r: any) => {
+        this.all = Array.isArray(r) ? r : (r && Array.isArray(r.data) ? r.data : []);
+        this.loading = false;
+      },
+      error: () => { this.loading = false; },
+    });
   }
 
-  clear() {
-    this.query = '';
-    this.results = [];
-  }
+  setType(t: string): void { this.type = t; }
 
-  setGenre(g: string) {
-    this.activeGenre = g;
-    if (this.query) this.onSearch(this.query);
-  }
-
-  open(item: any) {
+  open(item: any): void {
+    if (!item) { return; }
     this.router.navigate(['/watch', item.id]);
   }
 }
