@@ -1,357 +1,361 @@
+import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { ApiService } from '../../core/services/api.service';
+import { environment } from '../../../environments/environment';
 
+/**
+ * manyak-tv1 PaymentModal.tsx ning to'liq ko'chirmasi:
+ * tarif tanlash -> promokod -> karta raqamini nusxalash -> chek rasmini
+ * yuklash -> adminga yuborish -> tasdiqlashni kutish.
+ */
 @Component({
   selector: 'app-subscription',
   template: `
-    <div class="sb">
-      <div class="sb-top">
-        <button class="sb-back" (click)="back()">&#8592;</button>
-        <span class="sb-name">Obuna va tolov</span>
+    <div class="pay">
+      <header class="ph">
+        <button class="bk" (click)="back()">&#8592;</button>
+        <h1>VIP Obuna</h1>
+        <span class="sp"></span>
+      </header>
+
+      <!-- Muvaffaqiyat ekrani -->
+      <div class="done" *ngIf="successMsg">
+        <div class="done-i">&#10003;</div>
+        <h2>Chek yuborildi</h2>
+        <p>{{ successMsg }}</p>
+        <p class="done-s">Admin tasdiqlagach VIP avtomatik faollashadi. Bot orqali xabar keladi.</p>
+        <button class="b b-red wide" (click)="back()">Bosh sahifaga</button>
       </div>
 
-      <div class="sb-pad">
-        <h1 class="sb-h1">VIP obuna</h1>
-        <p class="sb-lead">Barcha premium kinolar, seriallar va anime cheksiz.</p>
+      <div *ngIf="!successMsg">
+        <!-- 1. Tarif tanlash -->
+        <section class="sec">
+          <p class="sec-t">1. Tarifni tanlang</p>
+          <p class="muted" *ngIf="loadingPlans">Yuklanmoqda...</p>
 
-        <div class="sb-plans">
-          <button
-            class="sb-plan"
+          <div
+            class="plan"
             *ngFor="let p of plans"
-            [class.sb-plan-on]="selectedPlanId === p.id"
+            [class.plan-on]="selectedPlanId === planId(p)"
             (click)="selectPlan(p)">
-            <div class="sb-plan-l">
-              <p class="sb-plan-name">{{ p.name }}</p>
-              <p class="sb-plan-days">{{ p.durationDays }} kun</p>
+            <div>
+              <p class="pl-n">{{ p.name || p.title }}</p>
+              <p class="pl-d">{{ p.durationDays || p.days }} kun{{ p.description ? ' &middot; ' + p.description : '' }}</p>
             </div>
-            <div class="sb-plan-r">
-              <p class="sb-plan-price">{{ money(p.price) }}</p>
-              <p class="sb-plan-cur">som</p>
+            <div class="pl-r">
+              <p class="pl-p">{{ money(p.price) }}</p>
+              <p class="pl-c">UZS</p>
             </div>
-          </button>
-          <p class="sb-empty" *ngIf="!loadingPlans && !plans.length">Tariflar topilmadi.</p>
-          <p class="sb-empty" *ngIf="loadingPlans">Yuklanmoqda...</p>
-        </div>
+          </div>
 
-        <div class="sb-box">
-          <p class="sb-label">Promokod</p>
-          <div class="sb-promo">
-            <input class="sb-input" [(ngModel)]="promoInput" [ngModelOptions]="{ standalone: true }"
-                   placeholder="Masalan: MANYAK20" />
-            <button class="sb-promo-btn" [disabled]="checkingPromo" (click)="applyPromo()">
+          <p class="muted" *ngIf="!loadingPlans && plans.length === 0">
+            Tariflar yuklanmadi. Keyinroq urinib koring.
+          </p>
+        </section>
+
+        <!-- 2. Promokod -->
+        <section class="sec">
+          <p class="sec-t">2. Promokod (ixtiyoriy)</p>
+          <div class="promo">
+            <input
+              class="in"
+              [(ngModel)]="promoInput"
+              [ngModelOptions]="{ standalone: true }"
+              placeholder="MANYAK10" />
+            <button class="b b-g" [disabled]="checkingPromo" (click)="applyPromo()">
               {{ checkingPromo ? '...' : 'Tekshirish' }}
             </button>
           </div>
-          <p class="sb-promo-msg" [class.sb-err]="promoError" *ngIf="promoMessage">{{ promoMessage }}</p>
-        </div>
+          <p class="pm" [class.pm-err]="promoError" *ngIf="promoMsg">{{ promoMsg }}</p>
+        </section>
 
-        <div class="sb-total">
-          <span>Tolov summasi</span>
-          <strong>{{ money(finalPrice) }} som</strong>
-        </div>
+        <!-- 3. To'lov -->
+        <section class="sec">
+          <p class="sec-t">3. Tolov qiling</p>
+          <div class="card">
+            <p class="cd-l">Karta raqami</p>
+            <div class="cd-row">
+              <p class="cd-v">{{ cardNumber }}</p>
+              <button class="b b-g" (click)="copy(cardNumber, 'card')">
+                {{ copied === 'card' ? 'Nusxalandi' : 'Nusxalash' }}
+              </button>
+            </div>
+            <p class="cd-h">{{ cardHolder }}</p>
 
-        <div class="sb-box">
-          <p class="sb-label">Karta raqami</p>
-          <div class="sb-card">
-            <span class="sb-card-num">{{ cardNumber }}</span>
-            <button class="sb-copy" (click)="copy(cardNumber)">Nusxa</button>
+            <div class="amt">
+              <div>
+                <p class="cd-l">Tolov summasi</p>
+                <p class="amt-v">
+                  <span class="old" *ngIf="discountPercent > 0">{{ money(basePrice) }}</span>
+                  {{ money(finalPrice) }} UZS
+                </p>
+              </div>
+              <button class="b b-g" (click)="copy(finalPrice + '', 'amount')">
+                {{ copied === 'amount' ? 'Nusxalandi' : 'Nusxalash' }}
+              </button>
+            </div>
           </div>
-          <p class="sb-card-owner">{{ cardOwner }}</p>
-          <p class="sb-hint">
-            Yuqoridagi kartaga tolov qiling, sungra chek rasmini yuklang.
-            Admin tasdiqlagach obuna avtomatik faollashadi.
-          </p>
-        </div>
+        </section>
 
-        <div class="sb-box">
-          <p class="sb-label">Chek rasmi</p>
-          <input type="file" accept="image/*" (change)="onFile($event)" />
-          <p class="sb-hint" *ngIf="uploading">Yuklanmoqda...</p>
-          <p class="sb-hint sb-ok" *ngIf="receiptUrl">Chek yuklandi.</p>
-          <p class="sb-hint sb-err" *ngIf="uploadError">{{ uploadError }}</p>
-          <img class="sb-preview" *ngIf="previewUrl" [src]="previewUrl" alt="chek" />
-        </div>
+        <!-- 4. Chek -->
+        <section class="sec">
+          <p class="sec-t">4. Chek rasmini yuklang</p>
 
-        <div class="sb-box">
-          <p class="sb-label">Izoh (ixtiyoriy)</p>
-          <textarea class="sb-input sb-area" rows="3"
-                    [(ngModel)]="notes" [ngModelOptions]="{ standalone: true }"
-                    placeholder="Tolov haqida qoshimcha malumot"></textarea>
-        </div>
+          <label class="drop">
+            <input type="file" accept="image/*" (change)="onFile($event)" hidden />
+            <span *ngIf="!previewUrl && !uploading">&#128247; Rasm tanlash</span>
+            <span *ngIf="uploading">Yuklanmoqda... {{ uploadProgress }}%</span>
+            <img *ngIf="previewUrl && !uploading" [src]="previewUrl" alt="chek" class="prev" />
+          </label>
+          <p class="pm pm-err" *ngIf="uploadError">{{ uploadError }}</p>
 
-        <button class="sb-submit" [disabled]="submitting || !receiptUrl || !selectedPlanId"
-                (click)="submit()">
-          {{ submitting ? 'Yuborilmoqda...' : 'Chekni yuborish' }}
-        </button>
-        <p class="sb-hint sb-err" *ngIf="submitError">{{ submitError }}</p>
-        <p class="sb-done" *ngIf="submitted">
-          Chek qabul qilindi. Admin tasdiqlashini kuting.
-        </p>
+          <textarea
+            class="ta"
+            rows="3"
+            [(ngModel)]="notes"
+            [ngModelOptions]="{ standalone: true }"
+            placeholder="Izoh (ixtiyoriy): tolov vaqti, karta oxirgi 4 raqami..."></textarea>
 
-        <section class="sb-hist" *ngIf="receipts.length">
-          <h2 class="sb-h2">Mening cheklarim</h2>
-          <div class="sb-rc" *ngFor="let r of receipts">
-            <span>{{ money(r.amount) }} som</span>
-            <span class="sb-st" [class.sb-st-ok]="r.status === 'approved'"
-                  [class.sb-st-no]="r.status === 'rejected'">{{ statusLabel(r.status) }}</span>
-          </div>
+          <button class="b b-red wide" [disabled]="submitting || !receiptUrl" (click)="submit()">
+            {{ submitting ? 'Yuborilmoqda...' : 'Chekni yuborish' }}
+          </button>
+          <p class="pm pm-err" *ngIf="submitError">{{ submitError }}</p>
+          <p class="note">Chek yuborilgach admin 5-30 daqiqada tasdiqlaydi.</p>
         </section>
       </div>
     </div>
   `,
   styles: [`
-    .sb { background: #0f0f0f; min-height: 100dvh; padding-bottom: 96px; }
-    .sb-top {
-      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-      position: sticky; top: 0; z-index: 30;
-      background: rgba(15,15,15,0.95); backdrop-filter: blur(8px);
-      border-bottom: 1px solid rgba(39,39,42,0.8);
-    }
-    .sb-back {
-      width: 32px; height: 32px; border-radius: 999px;
-      background: rgba(39,39,42,0.9); color: #fff;
-      border: 1px solid rgba(63,63,70,0.7); font-size: 16px;
-    }
-    .sb-name { font-size: 14px; font-weight: 700; color: #fff; }
-    .sb-pad { padding: 16px 14px 0; }
-    .sb-h1 { margin: 0; font-size: 22px; font-weight: 900; color: #fff; }
-    .sb-lead { margin: 6px 0 0; font-size: 13px; color: #a1a1aa; }
-    .sb-plans { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-    .sb-plan {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px; border-radius: 14px; text-align: left;
-      background: rgba(24,24,27,0.9); border: 1px solid rgba(39,39,42,0.9);
-    }
-    .sb-plan-on { border-color: #dc2626; background: rgba(69,10,10,0.35); }
-    .sb-plan-name { margin: 0; font-size: 14px; font-weight: 800; color: #fff; }
-    .sb-plan-days { margin: 2px 0 0; font-size: 11px; color: #a1a1aa; }
-    .sb-plan-r { text-align: right; }
-    .sb-plan-price { margin: 0; font-size: 16px; font-weight: 900; color: #f87171; }
-    .sb-plan-cur { margin: 0; font-size: 10px; color: #71717a; }
-    .sb-empty { font-size: 12px; color: #71717a; }
-    .sb-box {
-      margin-top: 16px; padding: 14px; border-radius: 14px;
-      background: rgba(24,24,27,0.85); border: 1px solid rgba(39,39,42,0.9);
-    }
-    .sb-label { margin: 0 0 8px; font-size: 12px; font-weight: 800; color: #d4d4d8; }
-    .sb-promo { display: flex; gap: 8px; }
-    .sb-input {
-      flex: 1; width: 100%; padding: 10px 12px; border-radius: 10px;
-      background: #0f0f0f; color: #fff; font-size: 13px;
-      border: 1px solid rgba(63,63,70,0.8); outline: none;
-    }
-    .sb-area { resize: vertical; font-family: inherit; }
-    .sb-promo-btn {
-      padding: 10px 14px; border-radius: 10px; border: none;
-      background: #3f3f46; color: #fff; font-size: 12px; font-weight: 700;
-    }
-    .sb-promo-msg { margin: 8px 0 0; font-size: 12px; color: #34d399; }
-    .sb-err { color: #f87171 !important; }
-    .sb-ok { color: #34d399 !important; }
-    .sb-total {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 16px; padding: 14px; border-radius: 14px;
-      background: linear-gradient(to right, rgba(69,10,10,0.6), rgba(24,24,27,0.9));
-      border: 1px solid rgba(153,27,27,0.5);
-      color: #d4d4d8; font-size: 13px;
-    }
-    .sb-total strong { color: #fff; font-size: 17px; }
-    .sb-card {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 12px; border-radius: 10px; background: #0f0f0f;
-      border: 1px solid rgba(63,63,70,0.8);
-    }
-    .sb-card-num { color: #fff; font-size: 15px; font-weight: 800; letter-spacing: 0.06em; }
-    .sb-copy {
-      padding: 6px 12px; border-radius: 8px; border: none;
-      background: #dc2626; color: #fff; font-size: 11px; font-weight: 800;
-    }
-    .sb-card-owner { margin: 8px 0 0; font-size: 12px; color: #a1a1aa; }
-    .sb-hint { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: #71717a; }
-    .sb-preview {
-      margin-top: 10px; width: 100%; max-height: 220px; object-fit: contain;
-      border-radius: 10px; border: 1px solid rgba(63,63,70,0.7);
-    }
-    .sb-submit {
-      width: 100%; margin-top: 18px; padding: 14px; border-radius: 12px; border: none;
-      background: #dc2626; color: #fff; font-size: 14px; font-weight: 900;
-    }
-    .sb-submit:disabled { background: #3f3f46; color: #a1a1aa; }
-    .sb-done { margin-top: 12px; font-size: 13px; color: #34d399; text-align: center; }
-    .sb-hist { margin-top: 24px; }
-    .sb-h2 { font-size: 15px; font-weight: 900; color: #fff; margin: 0 0 10px; }
-    .sb-rc {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 11px 12px; border-radius: 10px; margin-bottom: 8px;
-      background: rgba(24,24,27,0.9); border: 1px solid rgba(39,39,42,0.9);
-      color: #e4e4e7; font-size: 13px;
-    }
-    .sb-st { font-size: 11px; font-weight: 800; color: #fbbf24; }
-    .sb-st-ok { color: #34d399; }
-    .sb-st-no { color: #f87171; }
+    .pay { min-height: 100dvh; background: #09090b; color: #fff; padding-bottom: calc(var(--nav-height, 68px) + 28px); }
+    .ph { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between;
+          padding: 14px 16px; background: rgba(15,15,15,0.94); backdrop-filter: blur(10px);
+          border-bottom: 1px solid #27272a; }
+    .ph h1 { font-size: 1rem; font-weight: 800; margin: 0; }
+    .bk { background: none; border: none; color: #fff; font-size: 1.25rem; cursor: pointer; }
+    .sp { width: 20px; }
+    .sec { padding: 16px; }
+    .sec-t { font-size: 0.78rem; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 10px; }
+    .plan { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            background: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 14px; margin-bottom: 9px; cursor: pointer; }
+    .plan-on { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
+    .pl-n { font-size: 0.92rem; font-weight: 800; margin: 0; }
+    .pl-d { font-size: 0.72rem; color: #a1a1aa; margin: 4px 0 0; }
+    .pl-r { text-align: right; }
+    .pl-p { font-size: 1rem; font-weight: 900; color: #fbbf24; margin: 0; }
+    .pl-c { font-size: 0.62rem; color: #71717a; margin: 2px 0 0; }
+    .promo { display: flex; gap: 8px; }
+    .in { flex: 1; background: #0f0f0f; border: 1px solid #3f3f46; border-radius: 10px; padding: 11px 13px;
+          color: #fff; font-size: 0.85rem; outline: none; text-transform: uppercase; }
+    .pm { font-size: 0.75rem; color: #34d399; margin: 8px 0 0; }
+    .pm-err { color: #fca5a5; }
+    .card { background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 16px; }
+    .cd-l { font-size: 0.68rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.06em; margin: 0; }
+    .cd-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+    .cd-v { font-size: 1.05rem; font-weight: 900; letter-spacing: 0.12em; font-family: monospace; margin: 0; }
+    .cd-h { font-size: 0.78rem; color: #d4d4d8; margin: 8px 0 0; }
+    .amt { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px;
+           margin-top: 14px; padding-top: 14px; border-top: 1px dashed #3f3f46; }
+    .amt-v { font-size: 1.1rem; font-weight: 900; color: #34d399; margin: 5px 0 0; }
+    .old { font-size: 0.8rem; color: #71717a; text-decoration: line-through; margin-right: 7px; font-weight: 600; }
+    .drop { display: flex; align-items: center; justify-content: center; min-height: 128px;
+            border: 2px dashed #3f3f46; border-radius: 14px; background: #121216;
+            color: #a1a1aa; font-size: 0.84rem; cursor: pointer; overflow: hidden; }
+    .prev { width: 100%; max-height: 260px; object-fit: contain; }
+    .ta { width: 100%; margin-top: 12px; background: #0f0f0f; border: 1px solid #3f3f46; border-radius: 12px;
+          padding: 11px 13px; color: #fff; font-size: 0.85rem; font-family: inherit; outline: none; resize: vertical; }
+    .b { border: none; border-radius: 11px; padding: 11px 14px; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
+    .b-red { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+    .b-g { background: #27272a; color: #e4e4e7; }
+    .b:disabled { opacity: 0.45; }
+    .wide { width: 100%; margin-top: 14px; padding: 14px; font-size: 0.9rem; }
+    .note { font-size: 0.68rem; color: #71717a; margin: 10px 0 0; text-align: center; }
+    .muted { font-size: 0.78rem; color: #71717a; }
+    .done { padding: 48px 24px; text-align: center; }
+    .done-i { width: 68px; height: 68px; margin: 0 auto 16px; border-radius: 50%;
+              background: rgba(16,163,74,0.16); color: #34d399; font-size: 1.9rem;
+              display: flex; align-items: center; justify-content: center; }
+    .done h2 { font-size: 1.15rem; font-weight: 900; margin: 0 0 8px; }
+    .done p { font-size: 0.85rem; color: #d4d4d8; margin: 0; }
+    .done-s { font-size: 0.75rem !important; color: #a1a1aa !important; margin-top: 10px !important; }
   `],
 })
 export class SubscriptionComponent implements OnInit {
-  plans: any[] = [];
-  receipts: any[] = [];
-  loadingPlans = true;
+  private readonly base = environment.apiUrl;
 
+  plans: any[] = [];
+  loadingPlans = false;
   selectedPlanId = '';
-  basePrice = 0;
+
+  promoInput = '';
+  promoMsg = '';
+  promoError = false;
+  checkingPromo = false;
   discountPercent = 0;
   appliedPromo = '';
 
-  promoInput = '';
-  promoMessage = '';
-  promoError = false;
-  checkingPromo = false;
-
+  previewUrl: string | null = null;
   receiptUrl = '';
-  previewUrl = '';
   uploading = false;
+  uploadProgress = 0;
   uploadError = '';
-
   notes = '';
   submitting = false;
-  submitted = false;
   submitError = '';
+  successMsg = '';
 
+  copied = '';
   cardNumber = '8600 0000 0000 0000';
-  cardOwner = 'MANYAK TV';
+  cardHolder = 'MANYAK TV';
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly router: Router,
-  ) {}
+  private readonly MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
+
+  constructor(private readonly http: HttpClient, private readonly router: Router) {}
 
   ngOnInit(): void {
-    this.api.getPlans().subscribe({
+    this.loadingPlans = true;
+    this.http.get<any>(this.base + '/plans').subscribe({
       next: (r: any) => {
-        this.plans = Array.isArray(r) ? r : (r && r.data ? r.data : []);
         this.loadingPlans = false;
-        if (this.plans.length) { this.selectPlan(this.plans[0]); }
+        this.plans = Array.isArray(r) ? r : (r && r.data) || [];
+        if (this.plans.length > 0) { this.selectedPlanId = this.planId(this.plans[0]); }
       },
       error: () => { this.loadingPlans = false; },
     });
 
-    this.api.getMyReceipts().subscribe({
-      next: (r: any) => { this.receipts = Array.isArray(r) ? r : (r && r.data ? r.data : []); },
-      error: () => { /* noop */ },
+    this.http.get<any>(this.base + '/settings').subscribe({
+      next: (r: any) => {
+        if (r && r.cardNumber) { this.cardNumber = r.cardNumber; }
+        if (r && r.cardHolder) { this.cardHolder = r.cardHolder; }
+      },
+      error: () => {},
     });
   }
 
-  get finalPrice(): number {
-    const p = this.basePrice || 0;
-    if (!this.discountPercent) { return p; }
-    return Math.round(p * (100 - this.discountPercent) / 100);
+  planId(p: any): string {
+    return String((p && (p.id || p.code)) || '');
   }
 
   selectPlan(p: any): void {
-    if (!p) { return; }
-    this.selectedPlanId = p.id;
-    this.basePrice = p.price || 0;
+    this.selectedPlanId = this.planId(p);
+  }
+
+  get selectedPlan(): any {
+    return this.plans.find((p: any) => this.planId(p) === this.selectedPlanId) || null;
+  }
+
+  get basePrice(): number {
+    const p = this.selectedPlan;
+    return Number((p && p.price) || 0);
+  }
+
+  get finalPrice(): number {
+    const d = this.discountPercent > 0 ? this.discountPercent : 0;
+    return Math.max(0, Math.round(this.basePrice * (100 - d) / 100));
   }
 
   money(v: any): string {
-    const n = Number(v || 0);
-    return n.toLocaleString('ru-RU');
-  }
-
-  statusLabel(s: string): string {
-    if (s === 'approved') { return 'Tasdiqlangan'; }
-    if (s === 'rejected') { return 'Rad etilgan'; }
-    return 'Kutilmoqda';
+    try { return Number(v || 0).toLocaleString('ru-RU'); } catch { return String(v || 0); }
   }
 
   applyPromo(): void {
-    const code = (this.promoInput || '').trim();
+    const code = this.promoInput.trim().toUpperCase();
     if (!code) { return; }
     this.checkingPromo = true;
-    this.promoMessage = '';
-    this.api.validatePromo(code, this.selectedPlanId).subscribe({
+    this.promoMsg = '';
+    this.http.post<any>(this.base + '/promo-codes/validate', { code: code }).subscribe({
       next: (r: any) => {
         this.checkingPromo = false;
-        const pct = r && (r.discountPercent || r.discount);
-        if (pct) {
-          this.discountPercent = pct;
-          this.appliedPromo = code;
-          this.promoError = false;
-          this.promoMessage = 'Promokod qollandi: -' + pct + '%';
-        } else {
-          this.discountPercent = 0;
+        const pct = Number((r && (r.discountPercent || r.discount)) || 0);
+        if (r && (r.valid === false)) {
           this.promoError = true;
-          this.promoMessage = 'Promokod notogri.';
+          this.promoMsg = 'Promokod yaroqsiz.';
+          this.discountPercent = 0;
+          return;
         }
+        this.promoError = false;
+        this.discountPercent = pct;
+        this.appliedPromo = code;
+        this.promoMsg = 'Promokod qollandi: -' + pct + '%';
       },
       error: () => {
         this.checkingPromo = false;
-        this.discountPercent = 0;
         this.promoError = true;
-        this.promoMessage = 'Promokod topilmadi yoki muddati tugagan.';
+        this.promoMsg = 'Promokod topilmadi yoki muddati tugagan.';
+        this.discountPercent = 0;
       },
     });
   }
 
-  onFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files && input.files[0];
+  copy(text: string, kind: string): void {
+    const clean = String(text || '').replace(/\s+/g, '');
+    const nav: any = navigator as any;
+    if (nav && nav.clipboard && nav.clipboard.writeText) {
+      nav.clipboard.writeText(clean);
+    }
+    this.copied = kind;
+    setTimeout(() => { this.copied = ''; }, 1800);
+  }
+
+  onFile(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input && input.files && input.files[0];
     if (!file) { return; }
     this.uploadError = '';
 
-    if (file.size > 8 * 1024 * 1024) {
-      this.uploadError = 'Fayl 8 MB dan katta bolmasin.';
+    if (file.size > this.MAX_RECEIPT_BYTES) {
+      this.uploadError = 'Rasm juda katta (8 MB dan oshmasin).';
+      return;
+    }
+    if (file.type.indexOf('image/') !== 0) {
+      this.uploadError = 'Faqat rasm fayli yuklanadi.';
       return;
     }
 
     this.previewUrl = URL.createObjectURL(file);
     this.uploading = true;
-    this.api.uploadReceipt(file).subscribe({
+    this.uploadProgress = 10;
+
+    const form = new FormData();
+    form.append('file', file, file.name);
+
+    this.http.post<any>(this.base + '/upload/receipt', form).subscribe({
       next: (r: any) => {
         this.uploading = false;
-        this.receiptUrl = r && r.url ? r.url : '';
-        if (!this.receiptUrl) { this.uploadError = 'Yuklashda xatolik.'; }
+        this.uploadProgress = 100;
+        this.receiptUrl = (r && (r.url || r.path || r.fileUrl)) || '';
+        if (!this.receiptUrl) { this.uploadError = 'Server rasm manzilini qaytarmadi.'; }
       },
       error: () => {
         this.uploading = false;
-        this.uploadError = 'Chekni yuklab bolmadi. Qayta urinib koring.';
+        this.uploadProgress = 0;
+        this.uploadError = 'Rasm yuklanmadi. Qayta urinib koring.';
       },
     });
   }
 
   submit(): void {
-    if (this.submitting || !this.receiptUrl || !this.selectedPlanId) { return; }
+    if (!this.receiptUrl) { return; }
     this.submitting = true;
     this.submitError = '';
-    this.api.submitReceipt({
-      type: 'subscription',
+    this.http.post<any>(this.base + '/payments/receipt', {
       planId: this.selectedPlanId,
       amount: this.finalPrice,
-      imageUrl: this.receiptUrl,
       promoCode: this.appliedPromo || undefined,
-      notes: this.notes || undefined,
+      receiptUrl: this.receiptUrl,
+      notes: this.notes.trim() || undefined,
     }).subscribe({
       next: () => {
         this.submitting = false;
-        this.submitted = true;
-        this.receiptUrl = '';
-        this.previewUrl = '';
-        this.api.getMyReceipts().subscribe({
-          next: (r: any) => { this.receipts = Array.isArray(r) ? r : (r && r.data ? r.data : []); },
-          error: () => { /* noop */ },
-        });
+        this.successMsg = 'Chekingiz admin tekshiruviga yuborildi.';
       },
       error: () => {
         this.submitting = false;
-        this.submitError = 'Yuborib bolmadi. Qayta urinib koring.';
+        this.submitError = 'Yuborilmadi. Internetni tekshirib qayta urinib koring.';
       },
     });
   }
 
-  copy(text: string): void {
-    const clean = (text || '').replace(/\s+/g, '');
-    if (navigator.clipboard) { navigator.clipboard.writeText(clean); }
+  back(): void {
+    this.router.navigate(['/']);
   }
-
-  back(): void { this.router.navigate(['/']); }
 }
