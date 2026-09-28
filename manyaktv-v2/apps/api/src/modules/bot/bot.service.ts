@@ -3,6 +3,9 @@ import { ConfigService } from '@nestjs/config';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
+/** Render static site manzili. WEBAPP_URL env bolmasa shu ishlatiladi. */
+const DEFAULT_WEBAPP_URL = 'https://manyaktv-web1.onrender.com';
+
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
@@ -31,7 +34,12 @@ export class BotService {
   }
 
   private get webAppUrl(): string {
-    return process.env.WEBAPP_URL || process.env.FRONTEND_URL || '';
+    const url = (
+      process.env.WEBAPP_URL ||
+      process.env.FRONTEND_URL ||
+      DEFAULT_WEBAPP_URL
+    ).trim();
+    return url.replace(/\/+$/, '');
   }
 
   /** Telegram Bot API ga sorov yuborish */
@@ -74,20 +82,37 @@ export class BotService {
 
   /** Asosiy menyu tugmalari */
   private mainKeyboard() {
+    const base = this.webAppUrl;
     const rows: Array<Array<Record<string, unknown>>> = [];
 
-    if (this.webAppUrl) {
-      rows.push([
-        { text: 'Kinolarni korish', web_app: { url: this.webAppUrl } },
-      ]);
-    }
-
     rows.push([
-      { text: 'Tariflar', callback_data: 'plans' },
-      { text: 'Yordam', callback_data: 'help' },
+      { text: 'MANYAK TV ni ochish', web_app: { url: base } },
     ]);
 
+    rows.push([
+      { text: 'Qidirish', web_app: { url: base + '/search' } },
+      { text: 'Mini dramalar', web_app: { url: base + '/shorts' } },
+    ]);
+
+    rows.push([
+      { text: 'Tariflar', web_app: { url: base + '/subscription' } },
+      { text: 'Profil', web_app: { url: base + '/profile' } },
+    ]);
+
+    rows.push([{ text: 'Yordam', callback_data: 'help' }]);
+
     return { inline_keyboard: rows };
+  }
+
+  /** Chat pastidagi doimiy Menu tugmasi */
+  async setMenuButton(): Promise<void> {
+    await this.call('setChatMenuButton', {
+      menu_button: {
+        type: 'web_app',
+        text: 'MANYAK TV',
+        web_app: { url: this.webAppUrl },
+      },
+    });
   }
 
   /** Webhook dan kelgan update ni qayta ishlash */
@@ -100,16 +125,11 @@ export class BotService {
 
       if (!chatId) return;
 
-      if (data === 'plans') {
+      if (data === 'help') {
         await this.sendMessage(
           chatId,
-          '<b>Tariflar</b>\n\nObuna rejalari va narxlar ilova ichida korsatilgan. Pastdagi tugma orqali oching.',
+          '<b>Yordam</b>\n\n/start - asosiy menyu\n/help - yordam\n\nIlovani ochib kinolarni tomosha qiling. Obuna uchun "Tariflar" bolimiga oting.\n\nSavollar boyicha administratorga yozing.',
           this.mainKeyboard(),
-        );
-      } else if (data === 'help') {
-        await this.sendMessage(
-          chatId,
-          '<b>Yordam</b>\n\n/start - botni qayta ishga tushirish\n\nSavollar boyicha administratorga yozing.',
         );
       }
       return;
@@ -123,11 +143,12 @@ export class BotService {
     const name = message?.from?.first_name || 'dost';
 
     if (text.startsWith('/start')) {
+      await this.setMenuButton();
       await this.sendMessage(
         chatId,
         'Salom, <b>' +
           name +
-          '</b>!\n\n<b>MANYAK TV</b> ga xush kelibsiz.\n\nKinolar, seriallar, anime va qisqa dramalar - hammasi bir joyda.\n\nBoshlash uchun pastdagi tugmani bosing.',
+          '</b>!\n\n<b>MANYAK TV</b> ga xush kelibsiz.\n\nKinolar, seriallar, anime va mini dramalar - hammasi bir joyda.\n\nBoshlash uchun pastdagi tugmani bosing.',
         this.mainKeyboard(),
       );
       return;
