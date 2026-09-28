@@ -7,13 +7,13 @@ import { ApiService } from '../../../core/services/api.service';
   selector: 'app-admin-users',
   template: `
     <div class="px-4 pt-4">
-      <div class="relative mb-4">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">&#128269;</span>
+      <div class="mb-4">
         <input
-          class="admin-input pl-9"
+          class="admin-input"
           type="text"
           placeholder="Ism, username, ID..."
           [(ngModel)]="query"
+          [ngModelOptions]="{ standalone: true }"
           (ngModelChange)="search$.next($event)"
         />
       </div>
@@ -22,9 +22,9 @@ import { ApiService } from '../../../core/services/api.service';
 
       <div *ngFor="let u of users" class="user-card" [class.banned]="u.isBanned">
         <div class="flex items-center gap-3">
-          <div class="avatar">{{ u.firstName?.charAt(0) }}</div>
+          <div class="avatar">{{ u.firstName ? u.firstName.charAt(0) : '?' }}</div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <p class="font-semibold text-sm truncate">{{ u.firstName }} {{ u.lastName }}</p>
               <span *ngIf="u.isVip" class="badge-small vip">VIP</span>
               <span *ngIf="u.isBanned" class="badge-small ban">BAN</span>
@@ -34,7 +34,7 @@ import { ApiService } from '../../../core/services/api.service';
                 >ADMIN</span
               >
             </div>
-            <p class="text-xs text-gray-400">{{ '@' + (u.username || u.telegramId) }}</p>
+            <p class="text-xs text-gray-400">&#64;{{ u.username || u.telegramId }}</p>
             <p class="text-xs text-gray-500">
               Tokenlar: {{ u.tokens }} &bull; Streak: {{ u.checkinStreak }}
             </p>
@@ -218,7 +218,7 @@ export class AdminUsersComponent implements OnInit {
   }
 
   resetHwid(u: any) {
-    if (!confirm(u.firstName + ' qurilma boglanishini bekor qilinsinmi?')) return;
+    if (!confirm(u.firstName + ' qurilma boglanishi bekor qilinsinmi?')) return;
     this.api.resetHwid(u.id).subscribe({ next: () => alert('HWID ochirildi') });
   }
 
