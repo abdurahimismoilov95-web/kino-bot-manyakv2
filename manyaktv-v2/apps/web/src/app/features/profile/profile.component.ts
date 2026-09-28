@@ -22,12 +22,51 @@ import { StorageService } from '../../core/services/storage.service';
           <span class="crown" *ngIf="isVip">&#128081;</span>
         </div>
 
-        <h2 class="name">{{ displayName }}</h2>
+        <h2 class="name">
+          {{ displayName }}
+          <span class="adm-tag" *ngIf="isAdmin">ADMIN</span>
+        </h2>
         <p class="handle">{{ handle }}</p>
+        <p class="tgid" *ngIf="telegramId">ID: {{ telegramId }}</p>
 
         <span class="badge" [class.badge-vip]="isVip" [class.badge-free]="!isVip">
           {{ isVip ? 'VIP obunachi' : 'Bepul reja' }}
         </span>
+      </div>
+
+      <!-- Telegram tasdiqlash (v1 ProfileView) -->
+      <div class="card ver-card" [class.ver-ok]="isVerified">
+        <div class="ver-top">
+          <span class="ver-ico">{{ isVerified ? '&#10003;' : '&#9993;' }}</span>
+          <div class="grow">
+            <p class="card-title">
+              {{ isVerified ? 'Hisob tasdiqlangan' : 'Hisobingiz tasdiqlanmagan' }}
+            </p>
+            <p class="card-sub" *ngIf="isVerified">
+              Telegram: {{ phone || ('ID ' + telegramId) }}
+            </p>
+            <p class="card-sub" *ngIf="!isVerified">
+              Botga kontaktingizni yuborib Telegram ID orqali tasdiqlang.
+            </p>
+          </div>
+        </div>
+        <button class="btn btn-blue" *ngIf="!isVerified" (click)="openVerify()">
+          Telegram profil orqali tasdiqlash
+        </button>
+      </div>
+
+      <!-- Admin boshqaruv paneli (v1) -->
+      <div class="card adm-card" *ngIf="isAdmin">
+        <div class="adm-top">
+          <span class="adm-ico">&#9881;</span>
+          <div class="grow">
+            <p class="card-title">
+              Admin Boshqaruv Paneli <span class="adm-badge">FAOL</span>
+            </p>
+            <p class="card-sub">Kino yuklash, tolov cheklari, foydalanuvchilar va kataloglar</p>
+          </div>
+        </div>
+        <button class="btn btn-red" (click)="goToAdmin()">Kirish</button>
       </div>
 
       <!-- VIP holati -->
@@ -54,6 +93,20 @@ import { StorageService } from '../../core/services/storage.service';
           <p class="card-sub">Barcha premium kinolar cheksiz</p>
         </div>
         <button class="btn btn-red" (click)="goToSubscription()">Olish</button>
+      </div>
+
+      <!-- Token / Bonus balansi (v1) -->
+      <div class="bal">
+        <div class="bal-box">
+          <div class="bal-l">&#127903; Tokenlar</div>
+          <div class="bal-v amber">{{ tokens }} <span class="bal-u">ta</span></div>
+          <p class="bal-h">Bitta token &#8212; bitta kontentni ochadi</p>
+        </div>
+        <div class="bal-box">
+          <div class="bal-l">&#128176; Bonus</div>
+          <div class="bal-v green">{{ bonusText }} <span class="bal-u">UZS</span></div>
+          <p class="bal-h">Tolovda chegirma sifatida ishlatiladi</p>
+        </div>
       </div>
 
       <!-- Statistika -->
@@ -122,6 +175,12 @@ import { StorageService } from '../../core/services/storage.service';
           <span class="chev">&#8250;</span>
         </div>
 
+        <div class="menu-item" (click)="openAdminContact()">
+          <span class="mi-icon">&#9758;</span>
+          <span class="grow">Adminga murojaat (Yordam)</span>
+          <span class="chev">&#8250;</span>
+        </div>
+
         <div class="menu-item" (click)="clearCache()">
           <span class="mi-icon">&#9851;</span>
           <span class="grow">Keshni tozalash</span>
@@ -143,6 +202,13 @@ import { StorageService } from '../../core/services/storage.service';
 
       <p class="version">MANYAK TV v2.0.0</p>
     </div>
+
+    <!-- Telegram tasdiqlash oynasi -->
+    <app-telegram-verify
+      [open]="verifyOpen"
+      [dismissible]="true"
+      (verified)="onVerified($event)"
+      (closed)="verifyOpen = false"></app-telegram-verify>
 
     <!-- Dialog (Telegram WebApp confirm ishlamaydi) -->
     <div class="dialog-backdrop" *ngIf="dialog" (click)="dialog = null">
@@ -167,7 +233,7 @@ import { StorageService } from '../../core/services/storage.service';
       background: #0f0f0f;
       color: #fff;
     }
-    .grow { flex: 1; }
+    .grow { flex: 1; min-width: 0; }
 
     /* Hero */
     .hero {
@@ -195,7 +261,14 @@ import { StorageService } from '../../core/services/storage.service';
     .avatar-vip { border-color: #f59e0b; box-shadow: 0 0 18px rgba(245,158,11,0.45); }
     .crown { position: absolute; top: -6px; right: -6px; font-size: 1.5rem; }
     .name { font-size: 1.25rem; font-weight: 800; margin: 12px 0 2px; }
+    .adm-tag {
+      margin-left: 6px; font-size: 0.55rem; font-weight: 900;
+      background: #450a0a; color: #f87171; border: 1px solid #991b1b;
+      padding: 2px 5px; border-radius: 5px; vertical-align: middle;
+      letter-spacing: 0.06em;
+    }
     .handle { font-size: 0.85rem; color: #a1a1aa; margin: 0; }
+    .tgid { font-size: 0.7rem; color: #71717a; margin: 3px 0 0; font-family: monospace; }
     .badge {
       display: inline-block;
       margin-top: 10px;
@@ -218,6 +291,32 @@ import { StorageService } from '../../core/services/storage.service';
     }
     .card-title { font-size: 0.95rem; font-weight: 700; margin: 0; }
     .card-sub { font-size: 0.78rem; color: #a1a1aa; margin: 4px 0 0; }
+
+    .ver-card {
+      border-color: rgba(37,99,235,0.45);
+      background: linear-gradient(135deg, rgba(30,64,175,0.18), #18181b);
+    }
+    .ver-card.ver-ok {
+      border-color: rgba(16,185,129,0.45);
+      background: linear-gradient(135deg, rgba(6,78,59,0.25), #18181b);
+    }
+    .ver-top { display: flex; align-items: center; gap: 12px; }
+    .ver-ico { font-size: 1.3rem; }
+    .btn-blue { width: 100%; margin-top: 12px; background: #2563eb; color: #fff; }
+
+    .adm-card {
+      border-color: rgba(153,27,27,0.85);
+      background: rgba(69,10,10,0.45);
+    }
+    .adm-top { display: flex; align-items: center; gap: 12px; }
+    .adm-ico { font-size: 1.3rem; color: #f87171; }
+    .adm-badge {
+      margin-left: 6px; font-size: 0.55rem; font-weight: 900;
+      background: #16a34a; color: #052e16; padding: 2px 6px; border-radius: 999px;
+      vertical-align: middle;
+    }
+    .adm-card .btn { width: 100%; margin-top: 12px; }
+
     .vip-card { border-color: rgba(245,158,11,0.4); background: linear-gradient(135deg, rgba(245,158,11,0.12), #18181b); }
     .vip-top { display: flex; align-items: center; gap: 12px; }
     .vip-icon { font-size: 1.4rem; }
@@ -236,6 +335,20 @@ import { StorageService } from '../../core/services/storage.service';
       border-color: rgba(220,38,38,0.35);
     }
     .promo-left { flex: 1; }
+
+    /* Balans */
+    .bal { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .bal-box {
+      background: rgba(9,9,11,0.85);
+      border: 1px solid #27272a;
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .bal-l { font-size: 0.7rem; color: #a1a1aa; }
+    .bal-v { font-size: 1.15rem; font-weight: 900; margin-top: 4px; }
+    .bal-u { font-size: 0.62rem; color: #a1a1aa; font-weight: 700; }
+    .bal-h { font-size: 0.6rem; color: #71717a; margin: 4px 0 0; line-height: 1.4; }
+    .amber { color: #fbbf24; }
 
     /* Stats */
     .stats {
@@ -344,6 +457,8 @@ export class ProfileComponent implements OnInit {
   user: any = null;
   historyCount = 0;
 
+  verifyOpen = false;
+
   checkinDone = false;
   checkinLoading = false;
   checkinMsg = '';
@@ -390,7 +505,7 @@ export class ProfileComponent implements OnInit {
     });
   }
 
-  // ── Getterlar ────────────────────────────────────────────
+  // Getterlar
   get displayName(): string {
     if (!this.user) { return 'Foydalanuvchi'; }
     const first = this.user.firstName || '';
@@ -403,6 +518,20 @@ export class ProfileComponent implements OnInit {
     return this.user?.username ? '@' + this.user.username : 'MANYAK TV foydalanuvchisi';
   }
 
+  get telegramId(): string {
+    const id = this.user?.telegramId || this.user?.tgId || '';
+    return id ? String(id) : '';
+  }
+
+  get phone(): string {
+    return this.user?.phone || '';
+  }
+
+  get isVerified(): boolean {
+    if (!this.user) { return false; }
+    return !!(this.user.isPhoneVerified || this.user.isVerified || this.user.phone);
+  }
+
   get avatar(): string {
     return this.user?.avatarUrl || this.fallbackAvatar;
   }
@@ -413,11 +542,20 @@ export class ProfileComponent implements OnInit {
 
   get isAdmin(): boolean {
     const role = this.user?.role;
-    return role === 'admin' || role === 'super_admin';
+    return role === 'admin' || role === 'super_admin' || !!this.user?.isAdmin;
   }
 
   get tokens(): number {
-    return this.user?.tokens || 0;
+    return this.user?.tokens || this.user?.accessTokens || 0;
+  }
+
+  get bonusText(): string {
+    const v = this.user?.bonusBalance || 0;
+    try {
+      return Number(v).toLocaleString('ru-RU');
+    } catch {
+      return String(v);
+    }
   }
 
   get streak(): number {
@@ -451,10 +589,23 @@ export class ProfileComponent implements OnInit {
     return 'Kunlik bonus olish';
   }
 
-  // ── Amallar ──────────────────────────────────────────────
+  // Amallar
   onAvatarError(event: Event): void {
     const img = event.target as HTMLImageElement;
     if (img.src !== this.fallbackAvatar) { img.src = this.fallbackAvatar; }
+  }
+
+  openVerify(): void {
+    this.verifyOpen = true;
+  }
+
+  onVerified(u: any): void {
+    this.verifyOpen = false;
+    if (u) { this.user = u; }
+    this.api.getMe().subscribe({
+      next: (fresh: any) => { this.user = fresh; },
+      error: () => undefined,
+    });
   }
 
   checkin(): void {
@@ -505,11 +656,19 @@ export class ProfileComponent implements OnInit {
     this.router.navigate(['/admin']);
   }
 
-  openBot(): void {
+  private openTg(url: string): void {
     const tg = (window as any).Telegram?.WebApp;
-    const url = 'https://t.me/Manyaktvbot';
     if (tg?.openTelegramLink) { tg.openTelegramLink(url); }
     else { window.open(url, '_blank'); }
+  }
+
+  openBot(): void {
+    this.openTg('https://t.me/Manyaktvbot');
+  }
+
+  openAdminContact(): void {
+    const url = this.user?.adminContactUrl || 'https://t.me/Manyaktvbot';
+    this.openTg(String(url));
   }
 
   clearCache(): void {
