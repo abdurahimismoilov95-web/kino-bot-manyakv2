@@ -9,6 +9,7 @@ import { ContentDetailsComponent } from './components/content-details/content-de
 import { SkeletonCardComponent } from './components/skeleton/skeleton-card.component';
 import { DailyCheckinComponent } from './components/daily-checkin/daily-checkin.component';
 import { StoreShowcaseComponent } from './components/store-showcase/store-showcase.component';
+import { TelegramVerifyComponent } from './components/telegram-verify/telegram-verify.component';
 
 const SHARED = [
   HeaderComponent,
@@ -18,6 +19,7 @@ const SHARED = [
   SkeletonCardComponent,
   DailyCheckinComponent,
   StoreShowcaseComponent,
+  TelegramVerifyComponent,
 ];
 
 @NgModule({
