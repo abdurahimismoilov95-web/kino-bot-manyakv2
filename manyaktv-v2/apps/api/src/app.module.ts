@@ -18,6 +18,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { StreamingModule } from './modules/streaming/streaming.module';
 import { BotModule } from './modules/bot/bot.module';
+import { VerifyModule } from './modules/verify/verify.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { EventsModule } from './modules/events/events.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -108,6 +109,7 @@ function envFlag(value: string | undefined, fallback = false): boolean {
     PaymentModule,
     SubscriptionModule,
     StreamingModule,
+    VerifyModule,
     BotModule,
     AdminModule,
     EventsModule,
