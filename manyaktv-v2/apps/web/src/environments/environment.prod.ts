@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://manyaktv-api.onrender.com/api/v1',
+  apiUrl: 'https://kino-bot-manyakv2-gv3k.onrender.com/api/v1',
+  hlsBaseUrl: 'https://kino-bot-manyakv2-gv3k.onrender.com/hls',
 };
