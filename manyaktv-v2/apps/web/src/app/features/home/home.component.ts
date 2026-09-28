@@ -16,8 +16,20 @@ import { StorageService } from '../../core/services/storage.service';
         (details)="openDetails($event)">
       </app-hero-slider>
 
-      <div class="hm-pad">
-        <app-daily-checkin [isVip]="isVip" (openVip)="openPlans()"></app-daily-checkin>
+      <div class="hm-pad" *ngIf="isAdmin">
+        <div class="adm" (click)="goAdmin()">
+          <div class="adm-l">
+            <span class="adm-ico">&#9881;</span>
+            <div>
+              <div class="adm-row">
+                <h4>Admin Boshqaruv Paneli</h4>
+                <span class="adm-badge">FAOL</span>
+              </div>
+              <p>Kino yuklash, tolov cheklari, foydalanuvchilar va kataloglar</p>
+            </div>
+          </div>
+          <button class="adm-btn" (click)="goAdmin()">Kirish</button>
+        </div>
       </div>
 
       <div class="hm-pad hm-chips">
@@ -112,6 +124,15 @@ import { StorageService } from '../../core/services/storage.service';
       </section>
     </div>
 
+    <app-daily-checkin [isVip]="isVip" (openVip)="openPlans()"></app-daily-checkin>
+
+    <app-store-showcase
+      [items]="storeItems"
+      [hasAccess]="isVip"
+      (select)="openDetails($event)"
+      (buy)="openPlans()">
+    </app-store-showcase>
+
     <app-content-details
       [item]="selected"
       (close)="selected = null"
@@ -122,6 +143,26 @@ import { StorageService } from '../../core/services/storage.service';
   styles: [`
     .hm { padding-bottom: 110px; background: #0f0f0f; min-height: 100dvh; }
     .hm-pad { padding-left: 14px; padding-right: 14px; margin-top: 20px; }
+    .adm {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 14px; border-radius: 18px; cursor: pointer;
+      background: rgba(69,10,10,0.45); border: 1px solid rgba(153,27,27,0.85);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.4);
+    }
+    .adm-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .adm-ico { font-size: 20px; color: #f87171; }
+    .adm-row { display: flex; align-items: center; gap: 6px; }
+    .adm-row h4 { margin: 0; font-size: 12.5px; font-weight: 900; color: #fff; }
+    .adm-badge {
+      font-size: 9px; font-weight: 900; background: #dc2626; color: #fff;
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .adm p { margin: 3px 0 0; font-size: 11px; color: #a1a1aa; }
+    .adm-btn {
+      flex-shrink: 0; padding: 9px 15px; border-radius: 12px; border: none; cursor: pointer;
+      background: #dc2626; color: #fff; font-size: 12px; font-weight: 800;
+      box-shadow: 0 6px 16px rgba(220,38,38,0.3);
+    }
     .hm-chips {
       display: flex; align-items: center; gap: 8px;
       overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;
@@ -217,6 +258,7 @@ export class HomeComponent implements OnInit {
   newItems: any[] = [];
   shorts: any[] = [];
   content: any[] = [];
+  storeItems: any[] = [];
   selected: any = null;
 
   activeType: string | null = null;
@@ -258,7 +300,7 @@ export class HomeComponent implements OnInit {
     const u = this.storage.getUser();
     if (u) {
       this.isVip = !!u.isVip;
-      this.isAdmin = u.role === 'admin' || u.role === 'super_admin';
+      this.isAdmin = u.role === 'admin' || u.role === 'super_admin' || !!u.isAdmin;
     }
     this.loadHero();
     this.loadTrending();
@@ -306,9 +348,30 @@ export class HomeComponent implements OnInit {
         const total = r && r.totalPages ? r.totalPages : 1;
         this.hasMore = this.page < total;
         this.loading = false;
+        this.buildStore();
       },
       error: () => { this.loading = false; },
     });
+  }
+
+  /** v1: featuredStoreItems = isSinglePurchase || isFeaturedStore (isFeaturedStore birinchi) */
+  private buildStore(): void {
+    const all = this.content.concat(this.trending).concat(this.newItems);
+    const seen: Record<string, boolean> = {};
+    const picked: any[] = [];
+    all.forEach((c) => {
+      if (!c || !c.id || seen[c.id]) { return; }
+      if (c.isSinglePurchase || c.isFeaturedStore) {
+        seen[c.id] = true;
+        picked.push(c);
+      }
+    });
+    picked.sort((a, b) => {
+      if (a.isFeaturedStore && !b.isFeaturedStore) { return -1; }
+      if (!a.isFeaturedStore && b.isFeaturedStore) { return 1; }
+      return 0;
+    });
+    this.storeItems = picked;
   }
 
   setType(type: string | null): void {
@@ -340,6 +403,8 @@ export class HomeComponent implements OnInit {
   openPlans(): void { this.router.navigate(['/subscription']); }
 
   goShorts(): void { this.router.navigate(['/shorts']); }
+
+  goAdmin(): void { this.router.navigate(['/admin']); }
 
   posterOf(item: any): string {
     if (!item) { return ''; }

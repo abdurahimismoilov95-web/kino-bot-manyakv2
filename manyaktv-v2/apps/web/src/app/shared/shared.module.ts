@@ -8,6 +8,7 @@ import { ContentCardComponent } from './components/content-card/content-card.com
 import { ContentDetailsComponent } from './components/content-details/content-details.component';
 import { SkeletonCardComponent } from './components/skeleton/skeleton-card.component';
 import { DailyCheckinComponent } from './components/daily-checkin/daily-checkin.component';
+import { StoreShowcaseComponent } from './components/store-showcase/store-showcase.component';
 
 const SHARED = [
   HeaderComponent,
@@ -16,6 +17,7 @@ const SHARED = [
   ContentDetailsComponent,
   SkeletonCardComponent,
   DailyCheckinComponent,
+  StoreShowcaseComponent,
 ];
 
 @NgModule({
