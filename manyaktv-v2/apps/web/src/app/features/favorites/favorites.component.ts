@@ -1,80 +1,80 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { StorageService } from '../../core/services/storage.service';
 
+/** manyak-tv1 uslubidagi sevimlilar sahifasi */
 @Component({
   selector: 'app-favorites',
   template: `
-    <div class="favorites-page pb-20 px-4">
-      <h1 class="page-title pt-5 mb-4">&#10084; Sevimlilar</h1>
-
-      <div *ngIf="loading" class="text-center py-10 text-gray-400">Yuklanmoqda...</div>
-
-      <div *ngIf="!loading && items.length === 0" class="text-center py-16">
-        <p class="text-4xl mb-3">&#10084;</p>
-        <p class="text-gray-400">Hali hech narsa sevimlilarga qoshilmagan</p>
-        <p class="text-xs text-gray-500 mt-2">Kino ochib, yurak tugmasini bosing</p>
+    <div class="fv">
+      <div class="fv-head">
+        <h2>&#9829; Saqlangan</h2>
+        <span class="fv-count">{{ items.length }} ta</span>
       </div>
 
-      <div class="content-grid" *ngIf="!loading && items.length > 0">
-        <div class="content-card" *ngFor="let item of items">
-          <img
-            [src]="item.content?.posterUrl || 'assets/no-poster.png'"
-            [alt]="item.content?.title"
-            loading="lazy"
-            (click)="open(item)"
-          />
-          <div class="content-card-info">
-            <p class="title" (click)="open(item)">{{ item.content?.title }}</p>
-            <div class="flex items-center justify-between">
-              <span class="badge" [class.vip-badge]="item.content?.isPremium">
-                {{ item.content?.isPremium ? 'VIP' : 'Bepul' }}
-              </span>
-              <button class="text-red-400 text-sm" (click)="remove(item)">&#128465;</button>
-            </div>
-          </div>
-        </div>
+      <app-skeleton-card *ngIf="loading" variant="grid" [count]="6"></app-skeleton-card>
+
+      <div class="fv-empty" *ngIf="!loading && !items.length">
+        <div class="fv-empty-ico">&#9825;</div>
+        <h4>Sevimli kontent yoq</h4>
+        <p>Yoqqan kinolarni yurakcha tugmasi bilan saqlang.</p>
+      </div>
+
+      <div class="fv-grid" *ngIf="!loading && items.length">
+        <app-content-card *ngFor="let item of items"
+                          [item]="contentOf(item)" [hasAccess]="isVip" variant="grid"
+                          (click)="open(item)"></app-content-card>
       </div>
     </div>
   `,
-  styles: [
-    `
-      .page-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-      }
-    `,
-  ],
+  styles: [`
+    .fv { padding: 16px 14px 110px; background: #0f0f0f; min-height: 100dvh; }
+    .fv-head { display: flex; align-items: baseline; justify-content: space-between; }
+    .fv-head h2 { margin: 0; font-size: 18px; font-weight: 900; color: #fff; }
+    .fv-count { font-size: 12px; color: #a1a1aa; }
+    .fv-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px; margin-top: 16px;
+    }
+    @media (max-width: 360px) { .fv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .fv-empty { text-align: center; padding: 60px 0; }
+    .fv-empty-ico { font-size: 36px; color: #3f3f46; }
+    .fv-empty h4 { margin: 10px 0 0; font-size: 15px; font-weight: 800; color: #d4d4d8; }
+    .fv-empty p { margin: 6px auto 0; font-size: 12px; color: #71717a; max-width: 260px; }
+  `],
 })
 export class FavoritesComponent implements OnInit {
   items: any[] = [];
   loading = true;
+  isVip = false;
 
   constructor(
-    private api: ApiService,
-    private router: Router,
+    private readonly api: ApiService,
+    private readonly router: Router,
+    private readonly storage: StorageService,
   ) {}
 
-  ngOnInit() {
+  ngOnInit(): void {
+    const u = this.storage.getUser();
+    if (u) { this.isVip = !!u.isVip; }
     this.api.getFavorites().subscribe({
       next: (r: any) => {
-        this.items = r.data;
+        this.items = Array.isArray(r) ? r : (r && Array.isArray(r.data) ? r.data : []);
         this.loading = false;
       },
-      error: () => (this.loading = false),
+      error: () => { this.loading = false; },
     });
   }
 
-  open(item: any) {
-    if (item.content) this.router.navigate(['/watch', item.content.id]);
+  contentOf(entry: any): any {
+    if (!entry) { return null; }
+    return entry.content || entry.contentItem || entry;
   }
 
-  remove(item: any) {
-    if (!item.content) return;
-    this.api.toggleFavorite(item.content.id).subscribe({
-      next: () => {
-        this.items = this.items.filter((i) => i.id !== item.id);
-      },
-    });
+  open(entry: any): void {
+    const c = this.contentOf(entry);
+    const id = entry?.contentId || (c && c.id);
+    if (id) { this.router.navigate(['/watch', id]); }
   }
 }
