@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { VerifyService } from '../verify/verify.service';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
@@ -9,8 +10,19 @@ const DEFAULT_WEBAPP_URL = 'https://manyaktv-web1.onrender.com';
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
-    from?: { id?: number; first_name?: string };
+    from?: {
+      id?: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
     text?: string;
+    contact?: {
+      user_id?: number;
+      phone_number?: string;
+      first_name?: string;
+      last_name?: string;
+    };
   };
   callback_query?: {
     id?: string;
@@ -23,7 +35,13 @@ type TelegramUpdate = {
 export class BotService {
   private readonly logger = new Logger(BotService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  /** chatId -> tasdiqlash kodi (deep link orqali kelgan) */
+  private readonly pendingVerify = new Map<number, string>();
+
+  constructor(
+    private readonly config: ConfigService,
+    private readonly verifyService: VerifyService,
+  ) {}
 
   private get token(): string {
     return (
@@ -85,9 +103,7 @@ export class BotService {
     const base = this.webAppUrl;
     const rows: Array<Array<Record<string, unknown>>> = [];
 
-    rows.push([
-      { text: 'MANYAK TV ni ochish', web_app: { url: base } },
-    ]);
+    rows.push([{ text: 'MANYAK TV ni ochish', web_app: { url: base } }]);
 
     rows.push([
       { text: 'Qidirish', web_app: { url: base + '/search' } },
@@ -102,6 +118,17 @@ export class BotService {
     rows.push([{ text: 'Yordam', callback_data: 'help' }]);
 
     return { inline_keyboard: rows };
+  }
+
+  /** Kontakt sorash klaviaturasi */
+  private contactKeyboard() {
+    return {
+      keyboard: [
+        [{ text: 'Kontaktni yuborish', request_contact: true }],
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    };
   }
 
   /** Chat pastidagi doimiy Menu tugmasi */
@@ -139,10 +166,34 @@ export class BotService {
     const chatId = message?.chat?.id;
     if (!chatId) return;
 
+    // 1) Kontakt keldi -> tasdiqlashni yakunlash
+    if (message?.contact) {
+      await this.handleContact(chatId, message);
+      return;
+    }
+
     const text = (message?.text || '').trim();
     const name = message?.from?.first_name || 'dost';
 
     if (text.startsWith('/start')) {
+      const payload = text.slice('/start'.length).trim();
+
+      // 2) Saytdan kelgan tasdiqlash havolasi: /start v_KOD (yoki auth_KOD)
+      const match = /^(?:v_|auth_|verify_)([A-Za-z0-9_-]+)$/.exec(payload);
+      if (match) {
+        const code = match[1];
+        this.pendingVerify.set(chatId, code);
+
+        await this.sendMessage(
+          chatId,
+          'Salom, <b>' +
+            name +
+            '</b>!\n\nHisobingizni tasdiqlash uchun pastdagi <b>"Kontaktni yuborish"</b> tugmasini bosing.\n\nBu faqat sizning Telegram hisobingiz ekanini tekshirish uchun kerak. Raqamingiz hech kimga korsatilmaydi.',
+          this.contactKeyboard(),
+        );
+        return;
+      }
+
       await this.setMenuButton();
       await this.sendMessage(
         chatId,
@@ -168,5 +219,59 @@ export class BotService {
       'Buyruq tushunilmadi. Asosiy menyu uchun /start bosing.',
       this.mainKeyboard(),
     );
+  }
+
+  /** Kontakt xabarini qayta ishlash */
+  private async handleContact(
+    chatId: number,
+    message: NonNullable<TelegramUpdate['message']>,
+  ): Promise<void> {
+    const code = this.pendingVerify.get(chatId);
+
+    if (!code) {
+      await this.sendMessage(
+        chatId,
+        'Tasdiqlash sorovi topilmadi.\n\nIltimos, saytdagi <b>"Botga otish va tasdiqlash"</b> tugmasini qaytadan bosing.',
+        { remove_keyboard: true },
+      );
+      return;
+    }
+
+    const result = await this.verifyService.completeByContact(
+      code,
+      message.from || {},
+      message.contact || {},
+    );
+
+    if (result.ok) {
+      this.pendingVerify.delete(chatId);
+      await this.sendMessage(
+        chatId,
+        '<b>Tasdiqlandi!</b>\n\nEndi saytga qayting - hisobingiz avtomatik ochiladi.',
+        { remove_keyboard: true },
+      );
+      await this.setMenuButton();
+      await this.sendMessage(
+        chatId,
+        'MANYAK TV ni ochish uchun pastdagi tugmani bosing.',
+        this.mainKeyboard(),
+      );
+      return;
+    }
+
+    let reason = 'Tasdiqlab bolmadi. Qaytadan urinib koring.';
+    if (result.reason === 'expired') {
+      this.pendingVerify.delete(chatId);
+      reason =
+        'Tasdiqlash kodi eskirgan. Saytga qaytib, tasdiqlashni qaytadan boshlang.';
+    } else if (result.reason === 'foreign_contact') {
+      reason =
+        'Iltimos, <b>ozingizning</b> kontaktingizni yuboring. Boshqa odamning kontakti qabul qilinmaydi.';
+    } else if (result.reason === 'banned') {
+      this.pendingVerify.delete(chatId);
+      reason = 'Hisobingiz bloklangan. Administrator bilan boglaning.';
+    }
+
+    await this.sendMessage(chatId, reason, { remove_keyboard: true });
   }
 }
