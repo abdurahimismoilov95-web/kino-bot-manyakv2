@@ -1,97 +1,730 @@
-import { Component, OnInit } from '@angular/core';
+import {
+  Component, OnInit, OnDestroy, ElementRef, ViewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
+import Hls from 'hls.js';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 
+/**
+ * Shorts (mini dramalar) lentasi.
+ * v1 ShortsFeed.tsx dan kochirilgan: vertikal lenta, qism almashtirish,
+ * ovoz boshqaruvi, yoqtirish, qulflangan qism, qismlar paneli.
+ */
 @Component({
   selector: 'app-shorts',
   template: `
-    <div class="sh">
-      <div class="sh-top">
-        <button class="sh-back" (click)="back()">&#8592;</button>
-        <span class="sh-name">Mini dramalar</span>
+    <div class="shorts-root">
+      <!-- Yuklanmoqda -->
+      <div class="center-box" *ngIf="loading">
+        <div class="spinner"></div>
+        <p class="muted">Yuklanmoqda...</p>
       </div>
 
-      <div class="sh-feed">
-        <article class="sh-item" *ngFor="let item of items" (click)="open(item)">
-          <img class="sh-poster" [src]="item.posterUrl" [alt]="item.title" loading="lazy" />
-          <div class="sh-grad"></div>
-          <div class="sh-info">
-            <p class="sh-title">{{ item.title }}</p>
-            <p class="sh-sub" *ngIf="item.description">{{ item.description }}</p>
-            <span class="sh-play">&#9654; Korish</span>
-          </div>
-        </article>
+      <!-- Bosh qism -->
+      <div class="center-box" *ngIf="!loading && dramas.length === 0">
+        <p class="empty-glyph">&#9634;</p>
+        <p class="muted">Hozircha vertikal mini dramalar mavjud emas.</p>
+        <button class="btn btn-ghost" (click)="goHome()">Bosh sahifaga qaytish</button>
+      </div>
 
-        <p class="sh-empty" *ngIf="!loading && !items.length">Mini drama topilmadi.</p>
-        <p class="sh-empty" *ngIf="loading">Yuklanmoqda...</p>
+      <!-- Lenta -->
+      <div class="stage" *ngIf="!loading && currentDrama">
+        <!-- Video -->
+        <video
+          #video
+          class="video"
+          playsinline
+          webkit-playsinline
+          [muted]="isMuted"
+          [poster]="currentDrama.posterUrl || ''"
+          (click)="togglePlay()"
+          (loadeddata)="onVideoReady()"
+          (timeupdate)="onTimeUpdate()"
+          (ended)="nextEpisode()"></video>
+
+        <!-- Qulf -->
+        <div class="lock-overlay" *ngIf="isLocked">
+          <p class="lock-glyph">&#128274;</p>
+          <p class="lock-title">Bu qism qulflangan</p>
+          <p class="lock-sub">VIP obuna bilan barcha qismlar ochiladi</p>
+          <button class="btn btn-red" (click)="goPlans()">VIP olish</button>
+        </div>
+
+        <!-- Play belgisi -->
+        <div class="play-badge" *ngIf="!isPlaying && !isLocked" (click)="togglePlay()">
+          <span>&#9654;</span>
+        </div>
+
+        <!-- Yuqori panel -->
+        <div class="top-bar">
+          <button class="circle-btn" (click)="goHome()">&#8592;</button>
+          <span class="top-title">Shorts</span>
+          <button class="circle-btn" (click)="toggleMute()">
+            {{ isMuted ? '&#9788;' : '&#9835;' }}
+          </button>
+        </div>
+
+        <p class="mute-hint" *ngIf="isMuted && isPlaying" (click)="toggleMute()">
+          Ovozni yoqish uchun bosing
+        </p>
+
+        <!-- Ong tomondagi amallar -->
+        <div class="side-actions">
+          <button class="side-btn" (click)="toggleLike()">
+            <span class="side-glyph" [class.liked]="isLiked">
+              {{ isLiked ? '&#9829;' : '&#9825;' }}
+            </span>
+            <span class="side-label">{{ likeCount }}</span>
+          </button>
+
+          <button class="side-btn" (click)="showEpisodes = true">
+            <span class="side-glyph">&#9776;</span>
+            <span class="side-label">{{ episodes.length }}</span>
+          </button>
+
+          <button class="side-btn" (click)="toggleFav()">
+            <span class="side-glyph">{{ isFav ? '&#9733;' : '&#9734;' }}</span>
+            <span class="side-label">Saqlash</span>
+          </button>
+        </div>
+
+        <!-- Pastdagi malumot -->
+        <div class="info-bar">
+          <p class="drama-title">{{ currentDrama.title }}</p>
+          <p class="episode-line" *ngIf="currentEpisode">
+            {{ episodeLabel }}<span class="free-tag" *ngIf="isFreeEpisode">BEPUL</span>
+          </p>
+          <p class="drama-desc" *ngIf="currentDrama.description">
+            {{ currentDrama.description }}
+          </p>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="progressPercent"></div>
+        </div>
+
+        <!-- Yuqori/pastga surish -->
+        <div class="arrows">
+          <button class="arrow-btn" (click)="prevEpisode()" [disabled]="!hasPrev">&#9650;</button>
+          <button class="arrow-btn" (click)="nextEpisode()" [disabled]="!hasNext">&#9660;</button>
+        </div>
+
+        <p class="error-text" *ngIf="errorText">{{ errorText }}</p>
+      </div>
+
+      <!-- Qismlar paneli -->
+      <div class="sheet-backdrop" *ngIf="showEpisodes" (click)="showEpisodes = false">
+        <div class="sheet" (click)="$event.stopPropagation()">
+          <div class="sheet-head">
+            <p class="sheet-title">Qismlar ({{ episodes.length }})</p>
+            <button class="circle-btn" (click)="showEpisodes = false">&#10005;</button>
+          </div>
+          <div class="ep-grid">
+            <button
+              *ngFor="let ep of episodes; let i = index"
+              class="ep-cell"
+              [class.ep-active]="i === episodeIndex"
+              [class.ep-locked]="!canWatch(ep)"
+              (click)="selectEpisode(i)">
+              {{ ep.episodeNumber || (i + 1) }}
+              <span class="ep-lock" *ngIf="!canWatch(ep)">&#128274;</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boshqa dramalar -->
+      <div class="drama-strip" *ngIf="!loading && dramas.length > 1">
+        <button
+          *ngFor="let d of dramas; let i = index"
+          class="strip-item"
+          [class.strip-active]="i === dramaIndex"
+          (click)="selectDrama(i)">
+          <img [src]="d.posterUrl || ''" [alt]="d.title" />
+        </button>
       </div>
     </div>
   `,
   styles: [`
-    .sh { background: #000; min-height: 100dvh; padding-bottom: 90px; }
-    .sh-top {
-      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-      position: sticky; top: 0; z-index: 30;
-      background: rgba(0,0,0,0.9); backdrop-filter: blur(8px);
-    }
-    .sh-back {
-      width: 32px; height: 32px; border-radius: 999px;
-      background: rgba(39,39,42,0.9); color: #fff;
-      border: 1px solid rgba(63,63,70,0.7); font-size: 16px;
-    }
-    .sh-name { font-size: 14px; font-weight: 700; color: #fff; }
-    .sh-feed {
-      height: calc(100dvh - 142px); overflow-y: auto;
-      scroll-snap-type: y mandatory;
-    }
-    .sh-item {
-      position: relative; display: block; width: 100%;
-      height: calc(100dvh - 142px); scroll-snap-align: start;
-      background: #09090b; overflow: hidden;
-    }
-    .sh-poster { width: 100%; height: 100%; object-fit: cover; }
-    .sh-grad {
-      position: absolute; inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 55%);
-    }
-    .sh-info { position: absolute; left: 14px; right: 14px; bottom: 24px; }
-    .sh-title { margin: 0; font-size: 18px; font-weight: 900; color: #fff; }
-    .sh-sub {
-      margin: 6px 0 0; font-size: 12px; color: #d4d4d8; line-height: 1.5;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    .shorts-root {
+      position: relative;
+      min-height: 100dvh;
+      background: #000;
+      color: #fff;
       overflow: hidden;
     }
-    .sh-play {
-      display: inline-block; margin-top: 12px; padding: 9px 18px;
-      border-radius: 999px; background: #dc2626; color: #fff;
-      font-size: 13px; font-weight: 800;
+
+    /* Bosh holatlar */
+    .center-box {
+      min-height: 70dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      text-align: center;
     }
-    .sh-empty { color: #71717a; font-size: 13px; text-align: center; padding: 40px 0; }
+    .muted { color: #a1a1aa; font-size: 0.86rem; margin: 0; }
+    .empty-glyph { font-size: 2.6rem; margin: 0; color: #3f3f46; }
+    .spinner {
+      width: 34px; height: 34px;
+      border: 3px solid rgba(255,255,255,0.14);
+      border-top-color: #dc2626;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Sahna */
+    .stage {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      background: #000;
+    }
+    .video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      display: block;
+    }
+
+    /* Qulf */
+    .lock-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; text-align: center; padding: 24px;
+      z-index: 30;
+    }
+    .lock-glyph { font-size: 2.4rem; margin: 0; }
+    .lock-title { font-size: 1.05rem; font-weight: 800; margin: 0; }
+    .lock-sub { font-size: 0.8rem; color: #a1a1aa; margin: 0 0 10px; }
+
+    /* Play */
+    .play-badge {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem;
+      z-index: 20;
+      cursor: pointer;
+    }
+
+    /* Yuqori panel */
+    .top-bar {
+      position: absolute;
+      top: calc(10px + env(safe-area-inset-top, 0px));
+      left: 12px; right: 12px;
+      display: flex; align-items: center; gap: 10px;
+      z-index: 25;
+    }
+    .top-title { flex: 1; text-align: center; font-weight: 800; font-size: 0.95rem; }
+    .circle-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(10px);
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .mute-hint {
+      position: absolute;
+      top: calc(58px + env(safe-area-inset-top, 0px));
+      left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      color: #e4e4e7;
+      z-index: 25;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    /* Ong panel */
+    .side-actions {
+      position: absolute;
+      right: 10px;
+      bottom: 190px;
+      display: flex; flex-direction: column; gap: 16px;
+      z-index: 25;
+    }
+    .side-btn {
+      background: none; border: none; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      color: #fff;
+    }
+    .side-glyph { font-size: 1.5rem; line-height: 1; }
+    .side-glyph.liked { color: #ef4444; }
+    .side-label { font-size: 0.65rem; color: #d4d4d8; }
+
+    /* Pastdagi malumot */
+    .info-bar {
+      position: absolute;
+      left: 14px; right: 74px;
+      bottom: 104px;
+      z-index: 25;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+    }
+    .drama-title { font-size: 1.02rem; font-weight: 800; margin: 0 0 3px; }
+    .episode-line { font-size: 0.78rem; color: #d4d4d8; margin: 0 0 4px; }
+    .free-tag {
+      margin-left: 7px;
+      background: #16a34a;
+      color: #fff;
+      font-size: 0.6rem;
+      font-weight: 900;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .drama-desc {
+      font-size: 0.74rem;
+      color: #a1a1aa;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .progress-track {
+      position: absolute;
+      left: 0; right: 0; bottom: 96px;
+      height: 2px;
+      background: rgba(255,255,255,0.16);
+      z-index: 25;
+    }
+    .progress-fill { height: 100%; background: #dc2626; }
+
+    .arrows {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 25;
+    }
+    .arrow-btn {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.42);
+      color: #fff;
+      cursor: pointer;
+    }
+    .arrow-btn:disabled { opacity: 0.3; }
+
+    .error-text {
+      position: absolute;
+      left: 16px; right: 16px; bottom: 150px;
+      text-align: center;
+      color: #fca5a5;
+      font-size: 0.78rem;
+      z-index: 26;
+    }
+
+    /* Qismlar paneli */
+    .sheet-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: flex-end;
+      z-index: 200;
+    }
+    .sheet {
+      width: 100%;
+      background: #18181b;
+      border-top: 1px solid #3f3f46;
+      border-radius: 20px 20px 0 0;
+      padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+      max-height: 62dvh;
+      overflow-y: auto;
+    }
+    .sheet-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .sheet-title { font-weight: 800; margin: 0; }
+    .ep-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .ep-cell {
+      position: relative;
+      padding: 12px 0;
+      border-radius: 10px;
+      border: 1px solid #3f3f46;
+      background: #27272a;
+      color: #e4e4e7;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .ep-active { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .ep-locked { opacity: 0.55; }
+    .ep-lock { position: absolute; top: 2px; right: 4px; font-size: 0.6rem; }
+
+    /* Dramalar tasmasi */
+    .drama-strip {
+      position: absolute;
+      left: 0; right: 0;
+      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+      display: flex; gap: 8px;
+      padding: 0 14px;
+      overflow-x: auto;
+      z-index: 24;
+      scrollbar-width: none;
+    }
+    .drama-strip::-webkit-scrollbar { display: none; }
+    .strip-item {
+      flex: 0 0 auto;
+      width: 38px; height: 54px;
+      border-radius: 7px;
+      overflow: hidden;
+      border: 2px solid transparent;
+      background: #27272a;
+      padding: 0;
+      cursor: pointer;
+    }
+    .strip-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .strip-active { border-color: #dc2626; }
+
+    /* Tugmalar */
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 20px;
+      font-weight: 700;
+      font-size: 0.86rem;
+      cursor: pointer;
+    }
+    .btn-red { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+    .btn-ghost { background: #27272a; color: #e4e4e7; }
   `],
 })
-export class ShortsComponent implements OnInit {
-  items: any[] = [];
+export class ShortsComponent implements OnInit, OnDestroy {
+  @ViewChild('video') videoRef?: ElementRef<HTMLVideoElement>;
+
+  dramas: any[] = [];
+  dramaIndex = 0;
+  episodeIndex = 0;
+
   loading = true;
+  isPlaying = false;
+  isMuted = true;
+  isFav = false;
+  errorText = '';
+  showEpisodes = false;
+  progressPercent = 0;
+
+  private hls: Hls | null = null;
+  private saveTimer: any = null;
+  private likes: Record<string, boolean> = {};
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly router: Router,
   ) {}
 
   ngOnInit(): void {
-    this.api.getContent({ type: 'short_drama', page: 1, limit: 30 }).subscribe({
-      next: (r: any) => {
-        this.items = Array.isArray(r) ? r : (r && r.data ? r.data : []);
+    this.api.getContent({ type: 'short_drama', limit: 40 }).subscribe({
+      next: (res: any) => {
+        this.dramas = res?.data || [];
         this.loading = false;
+        if (this.dramas.length > 0) { this.loadDrama(0); }
       },
-      error: () => { this.loading = false; },
+      error: () => {
+        this.loading = false;
+        this.errorText = 'Mini dramalarni yuklab bolmadi.';
+      },
     });
   }
 
-  open(item: any): void {
-    if (!item) { return; }
-    this.router.navigate(['/watch', item.id]);
+  ngOnDestroy(): void {
+    this.saveProgress();
+    if (this.saveTimer) { clearInterval(this.saveTimer); }
+    this.destroyHls();
   }
 
-  back(): void { this.router.navigate(['/']); }
+  // ── Holat getterlari ────────────────────────────────────────
+  get currentDrama(): any {
+    return this.dramas[this.dramaIndex] || null;
+  }
+
+  get episodes(): any[] {
+    return this.currentDrama?.episodes || [];
+  }
+
+  get currentEpisode(): any {
+    return this.episodes[this.episodeIndex] || null;
+  }
+
+  get episodeLabel(): string {
+    const ep = this.currentEpisode;
+    if (!ep) { return ''; }
+    const num = ep.episodeNumber || this.episodeIndex + 1;
+    return num + '-qism' + (ep.title ? ' \u00B7 ' + ep.title : '');
+  }
+
+  get isFreeEpisode(): boolean {
+    return !!this.currentEpisode && this.canWatch(this.currentEpisode) && !this.auth.isVip;
+  }
+
+  get isLocked(): boolean {
+    const ep = this.currentEpisode;
+    return !!ep && !this.canWatch(ep);
+  }
+
+  get hasNext(): boolean {
+    return this.episodeIndex < this.episodes.length - 1
+      || this.dramaIndex < this.dramas.length - 1;
+  }
+
+  get hasPrev(): boolean {
+    return this.episodeIndex > 0 || this.dramaIndex > 0;
+  }
+
+  get isLiked(): boolean {
+    const key = this.likeKey();
+    return !!this.likes[key];
+  }
+
+  get likeCount(): number {
+    const base = this.currentEpisode?.likeCount || this.currentDrama?.likeCount || 0;
+    return base + (this.isLiked ? 1 : 0);
+  }
+
+  canWatch(ep: any): boolean {
+    if (!ep) { return false; }
+    if (ep.isFree) { return true; }
+    if (this.auth.isVip) { return true; }
+    const num = ep.episodeNumber || 0;
+    const freeLimit = this.currentDrama?.freeEpisodeCount || 0;
+    return num > 0 && num <= freeLimit;
+  }
+
+  // ── Navigatsiya ─────────────────────────────────────────────
+  selectDrama(i: number): void {
+    if (i === this.dramaIndex) { return; }
+    this.saveProgress();
+    this.loadDrama(i);
+  }
+
+  selectEpisode(i: number): void {
+    this.showEpisodes = false;
+    if (i === this.episodeIndex) { return; }
+    this.saveProgress();
+    this.episodeIndex = i;
+    this.startPlayback();
+  }
+
+  nextEpisode(): void {
+    this.saveProgress();
+    if (this.episodeIndex < this.episodes.length - 1) {
+      this.episodeIndex += 1;
+      this.startPlayback();
+    } else if (this.dramaIndex < this.dramas.length - 1) {
+      this.loadDrama(this.dramaIndex + 1);
+    }
+  }
+
+  prevEpisode(): void {
+    this.saveProgress();
+    if (this.episodeIndex > 0) {
+      this.episodeIndex -= 1;
+      this.startPlayback();
+    } else if (this.dramaIndex > 0) {
+      this.loadDrama(this.dramaIndex - 1, true);
+    }
+  }
+
+  private loadDrama(index: number, lastEpisode = false): void {
+    this.dramaIndex = index;
+    this.episodeIndex = 0;
+    this.errorText = '';
+    this.progressPercent = 0;
+
+    const drama = this.currentDrama;
+    this.isFav = !!drama?.isFavorite;
+
+    // Qismlar royxati toliq kelmagan bolsa alohida yuklaymiz
+    if (drama && (!drama.episodes || drama.episodes.length === 0)) {
+      this.api.getContentById(drama.id).subscribe({
+        next: (full: any) => {
+          this.dramas[index] = full;
+          this.isFav = !!full?.isFavorite;
+          if (lastEpisode) {
+            this.episodeIndex = Math.max((full?.episodes?.length || 1) - 1, 0);
+          }
+          this.startPlayback();
+        },
+        error: () => { this.errorText = 'Qismlarni yuklab bolmadi.'; },
+      });
+      return;
+    }
+
+    if (lastEpisode) {
+      this.episodeIndex = Math.max(this.episodes.length - 1, 0);
+    }
+    this.startPlayback();
+  }
+
+  // ── Video ───────────────────────────────────────────────────
+  private startPlayback(): void {
+    this.errorText = '';
+    this.progressPercent = 0;
+    this.destroyHls();
+
+    const drama = this.currentDrama;
+    const ep = this.currentEpisode;
+    if (!drama || !ep) { return; }
+
+    if (!this.canWatch(ep)) {
+      this.isPlaying = false;
+      return;
+    }
+
+    this.api.getEpisodeStreamUrl(drama.id, ep.id).subscribe({
+      next: (res: any) => this.attachStream(res?.masterPlaylist || ''),
+      error: () => { this.errorText = 'Video manzilini olib bolmadi.'; },
+    });
+  }
+
+  private attachStream(url: string): void {
+    const el = this.videoRef?.nativeElement;
+    if (!el || !url) { return; }
+
+    if (Hls.isSupported() && url.indexOf('.m3u8') !== -1) {
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      hls.loadSource(url);
+      hls.attachMedia(el);
+      hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
+        if (data?.fatal) {
+          this.errorText = 'Videoni yuklashda xatolik.';
+          this.destroyHls();
+        }
+      });
+      this.hls = hls;
+    } else {
+      el.src = url;
+    }
+  }
+
+  onVideoReady(): void {
+    const el = this.videoRef?.nativeElement;
+    if (!el) { return; }
+    el.muted = this.isMuted;
+    el.play().then(() => {
+      this.isPlaying = true;
+      this.startSaveTimer();
+    }).catch(() => {
+      // Brauzer ovozli avtoijroni bloklaydi - ovozsiz urinib koramiz
+      this.isMuted = true;
+      el.muted = true;
+      el.play().then(() => {
+        this.isPlaying = true;
+        this.startSaveTimer();
+      }).catch(() => { this.isPlaying = false; });
+    });
+  }
+
+  togglePlay(): void {
+    const el = this.videoRef?.nativeElement;
+    if (!el || this.isLocked) { return; }
+    if (el.paused) {
+      el.play().then(() => { this.isPlaying = true; }).catch(() => undefined);
+    } else {
+      el.pause();
+      this.isPlaying = false;
+    }
+  }
+
+  toggleMute(): void {
+    const el = this.videoRef?.nativeElement;
+    this.isMuted = !this.isMuted;
+    if (el) { el.muted = this.isMuted; }
+  }
+
+  onTimeUpdate(): void {
+    const el = this.videoRef?.nativeElement;
+    if (!el || !el.duration || !isFinite(el.duration)) { return; }
+    this.progressPercent = Math.min(100, (el.currentTime / el.duration) * 100);
+  }
+
+  // ── Amallar ─────────────────────────────────────────────────
+  toggleLike(): void {
+    const key = this.likeKey();
+    this.likes[key] = !this.likes[key];
+  }
+
+  toggleFav(): void {
+    const drama = this.currentDrama;
+    if (!drama) { return; }
+    this.api.toggleFavorite(drama.id).subscribe({
+      next: (r: any) => { this.isFav = !!r?.added; },
+      error: () => undefined,
+    });
+  }
+
+  goPlans(): void {
+    this.router.navigate(['/subscription']);
+  }
+
+  goHome(): void {
+    this.router.navigate(['/']);
+  }
+
+  // ── Yordamchilar ────────────────────────────────────────────
+  private likeKey(): string {
+    return (this.currentDrama?.id || '') + ':' + (this.currentEpisode?.id || '');
+  }
+
+  private startSaveTimer(): void {
+    if (this.saveTimer) { return; }
+    this.saveTimer = setInterval(() => this.saveProgress(), 5000);
+  }
+
+  private saveProgress(): void {
+    const el = this.videoRef?.nativeElement;
+    const drama = this.currentDrama;
+    const ep = this.currentEpisode;
+    if (!el || !drama || !ep) { return; }
+
+    const t = el.currentTime;
+    const d = el.duration;
+    if (!isFinite(t) || !isFinite(d) || t <= 0 || d <= 0) { return; }
+
+    this.api.saveProgress(drama.id, {
+      episodeId: ep.id,
+      progressSeconds: Math.floor(t),
+      durationSeconds: Math.floor(d),
+    }).subscribe({ next: () => undefined, error: () => undefined });
+  }
+
+  private destroyHls(): void {
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+    const el = this.videoRef?.nativeElement;
+    if (el) {
+      el.removeAttribute('src');
+      el.load();
+    }
+    this.isPlaying = false;
+  }
 }
