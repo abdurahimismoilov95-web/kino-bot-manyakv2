@@ -1,357 +1,469 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { HttpClient, HttpEventType } from '@angular/common/http';
 import { ApiService } from '../../../core/services/api.service';
+import { AdminApiService } from './admin-api.service';
+import { environment } from '../../../../environments/environment';
+
+interface UploadState { progress: number; status: string; }
 
 @Component({
   selector: 'app-admin-content',
   template: `
-    <div class="px-4 pt-4">
-      <div class="section-card mb-4" *ngIf="showForm">
-        <h3 class="section-title">{{ formTitle }}</h3>
-        <form [formGroup]="form" (ngSubmit)="save()">
-          <input class="admin-input mb-2" formControlName="title" placeholder="Sarlavha *" />
-          <input
-            class="admin-input mb-2"
-            formControlName="originalTitle"
-            placeholder="Asl sarlavha"
-          />
-          <select class="admin-input mb-2" formControlName="type">
-            <option value="movie">Film</option>
-            <option value="series">Serial</option>
-            <option value="anime_series">Anime</option>
-            <option value="short_drama">Short drama</option>
-          </select>
-          <input class="admin-input mb-2" formControlName="year" placeholder="Yil" type="number" />
-          <input
-            class="admin-input mb-2"
-            formControlName="duration"
-            placeholder="Davomiyligi (masalan: 1s 45d)"
-          />
-          <textarea
-            class="admin-input mb-2"
-            formControlName="description"
-            placeholder="Tavsif"
-            rows="3"
-          ></textarea>
-          <input
-            class="admin-input mb-2"
-            formControlName="genres"
-            placeholder="Janrlar (vergul bilan: Drama,Komediya)"
-          />
-
-          <div class="upload-area mb-2">
-            <label class="text-xs text-gray-400">Poster rasmi:</label>
-            <input type="file" accept="image/*" class="mt-1" (change)="onPosterChange($event)" />
-            <p *ngIf="posterUrl" class="text-xs text-green-400 mt-1">Yuklandi</p>
-          </div>
-
-          <div class="flex items-center gap-4 mb-3">
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" formControlName="isPremium" /> VIP kontenti
-            </label>
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" formControlName="isTrending" /> Trending
-            </label>
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" formControlName="isFeatured" /> Featured
-            </label>
-          </div>
-
-          <div class="flex gap-2">
-            <button type="submit" class="btn-primary flex-1" [disabled]="form.invalid || saving">
-              {{ submitLabel }}
-            </button>
-            <button type="button" class="btn-secondary" (click)="cancelForm()">Bekor</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="flex justify-between items-center mb-3 gap-2">
-        <input
-          class="admin-input"
-          style="max-width:200px"
-          type="text"
-          placeholder="Qidirish..."
-          [(ngModel)]="query"
-          [ngModelOptions]="{ standalone: true }"
-          (input)="onSearch()"
-        />
-        <button class="btn-primary text-sm" (click)="openAddForm()">+ Qoshish</button>
-      </div>
-
-      <div *ngIf="loading" class="text-center py-6 text-gray-400">Yuklanmoqda...</div>
-
-      <div *ngFor="let c of items" class="content-row-card">
-        <img [src]="c.posterUrl || 'assets/no-poster.png'" class="row-poster" />
-        <div class="flex-1 ml-3 min-w-0">
-          <p class="font-semibold text-sm truncate">{{ c.title }}</p>
-          <div class="flex gap-2 mt-0.5 flex-wrap">
-            <span class="badge-xs">{{ c.type }}</span>
-            <span *ngIf="c.isPremium" class="badge-xs vip">VIP</span>
-            <span *ngIf="c.isTrending" class="badge-xs trend">TREND</span>
-            <span
-              class="badge-xs"
-              [class.ready]="c.transcodeStatus === 'ready'"
-              [class.pending]="c.transcodeStatus === 'pending'"
-            >
-              HLS: {{ c.transcodeStatus }}
-            </span>
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Korishlar: {{ c.viewsCount }}</p>
+    <div class="ct">
+      <div class="head">
+        <div>
+          <h3 class="h">Kino va Dramalar Katalogi</h3>
+          <p class="sub">Yangi kino qo'shing yoki video yuklang</p>
         </div>
-        <div class="flex flex-col gap-1 ml-2">
-          <button class="btn-xs neutral" (click)="edit(c)">&#9998;</button>
-          <button class="btn-xs danger" (click)="delete(c)">&#10005;</button>
+        <button class="b b-red" (click)="openEditor()">+ Yangi Qo'shish</button>
+      </div>
+
+      <div class="chips">
+        <button *ngFor="let f of filters" class="chip" [class.on]="filter === f.v" (click)="filter = f.v">{{ f.t }}</button>
+      </div>
+
+      <div *ngIf="loading" class="empty">Yuklanmoqda...</div>
+      <div *ngIf="!loading && visible().length === 0" class="empty">Kontent yo'q</div>
+
+      <div class="grid">
+        <div class="card" *ngFor="let c of visible()">
+          <img class="cp" [src]="abs(c.posterUrl)" [alt]="c.title" />
+          <div class="ci">
+            <div>
+              <div class="ct-t">{{ c.title }}</div>
+              <div class="meta">{{ c.year }} &bull; <span class="ty">{{ c.type }}</span></div>
+              <div class="meta">
+                <span class="price">{{ c.price > 0 ? (c.price + ' som') : 'Bepul' }}</span>
+                <span class="tag" *ngIf="c.isVipIncluded === false">VIP emas</span>
+                <span class="tag g" *ngIf="c.isVipIncluded !== false">VIP rejasida</span>
+              </div>
+              <div class="meta am" *ngIf="c.episodes && c.episodes.length">{{ c.episodes.length }} ta epizod</div>
+            </div>
+            <div class="act">
+              <button class="ib" title="Telegramda e'lon qilish" (click)="announce(c)">&#128227;</button>
+              <button class="ib" title="Tahrirlash" (click)="openEditor(c)">&#9998;</button>
+              <button class="ib d" title="O'chirish" (click)="remove(c)">&#10005;</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="flex justify-between mt-4" *ngIf="totalPages > 1">
-        <button class="btn-xs neutral" [disabled]="page <= 1" (click)="prevPage()">&#8592;</button>
-        <span class="text-sm text-gray-400">{{ page }} / {{ totalPages }}</span>
-        <button class="btn-xs neutral" [disabled]="page >= totalPages" (click)="nextPage()">
-          &#8594;
-        </button>
+      <p class="ok" *ngIf="okMsg">{{ okMsg }}</p>
+      <p class="er" *ngIf="error">{{ error }}</p>
+    </div>
+
+    <div class="ov" *ngIf="editing">
+      <div class="md">
+        <button class="x" (click)="closeEditor()">&#10005;</button>
+        <h3 class="mh">{{ editing.id ? 'Kontentni Tahrirlash' : 'Yangi Kontent' }}</h3>
+
+        <div class="row2">
+          <div>
+            <label class="lb">Nomi</label>
+            <input class="in" [(ngModel)]="editing.title" />
+          </div>
+          <div>
+            <label class="lb">Turi</label>
+            <select class="in" [(ngModel)]="editing.type">
+              <option value="movie">Kino</option>
+              <option value="series">Serial</option>
+              <option value="anime_series">Anime</option>
+              <option value="short_drama">Mini Drama (9:16)</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="lb">Asl nomi</label>
+        <input class="in" [(ngModel)]="editing.originalTitle" />
+
+        <label class="lb">Ekrandagi katalog (bo'lim)</label>
+        <select class="in" [(ngModel)]="editing.catalogId" (ngModelChange)="onCatalog($event)">
+          <option value="">Katalog tanlang</option>
+          <option *ngFor="let k of catalogs" [value]="k.id">{{ k.title || k.name }}</option>
+        </select>
+
+        <div class="row2 mt">
+          <div class="box">
+            <label class="lb">Poster (rasm)</label>
+            <img *ngIf="editing.posterUrl" class="prev" [src]="abs(editing.posterUrl)" />
+            <label class="drop">
+              <span *ngIf="!up['poster']">{{ editing.posterUrl ? 'Tayyor! (boshqa tanlash)' : 'Rasm tanlang' }}</span>
+              <span *ngIf="up['poster']">{{ up['poster'].status === 'ok' ? 'Yuklandi' : ('Yuklanmoqda... ' + up['poster'].progress + '%') }}</span>
+              <input type="file" accept="image/*" (change)="onFile($event, 'poster')" hidden />
+            </label>
+            <input class="in" [(ngModel)]="editing.posterUrl" placeholder="yoki rasm URL" />
+          </div>
+
+          <div class="box" *ngIf="editing.type === 'movie'">
+            <label class="lb">Video fayl (kino)</label>
+            <label class="drop">
+              <span *ngIf="!up['video']">{{ editing.videoUrl ? 'Video tayyor! (boshqa tanlash)' : 'Videoni tanlang' }}</span>
+              <span *ngIf="up['video']">{{ up['video'].status === 'ok' ? 'Video yuklandi' : ('Video yuklanmoqda... ' + up['video'].progress + '%') }}</span>
+              <input type="file" accept="video/*" (change)="onFile($event, 'video')" hidden />
+            </label>
+            <div class="bar" *ngIf="up['video']"><div class="fill" [style.width.%]="up['video'].progress"></div></div>
+            <input class="in" [(ngModel)]="editing.videoUrl" placeholder="yoki video URL" />
+          </div>
+        </div>
+
+        <div class="row3 mt">
+          <div>
+            <label class="lb">Yil</label>
+            <input class="in" type="number" [(ngModel)]="editing.year" />
+          </div>
+          <div>
+            <label class="lb">Davomiyligi</label>
+            <input class="in" [(ngModel)]="editing.duration" placeholder="1s 45d" />
+          </div>
+          <div>
+            <label class="lb">Reyting</label>
+            <input class="in" type="number" step="0.1" [(ngModel)]="editing.rating" />
+          </div>
+        </div>
+
+        <label class="lb">Janrlar (vergul bilan)</label>
+        <input class="in" [(ngModel)]="genresText" placeholder="Drama, Komediya" />
+
+        <div class="mon">
+          <div class="lb">Monetizatsiya sozlamalari</div>
+          <label class="ck"><input type="checkbox" [(ngModel)]="editing.isVipIncluded" /> VIP'ga kiradi</label>
+          <label class="ck"><input type="checkbox" [(ngModel)]="editing.isSinglePurchase" /> Alohida sotuvda</label>
+          <label class="ck"><input type="checkbox" [(ngModel)]="editing.isPremium" /> Faqat VIP</label>
+          <label class="ck"><input type="checkbox" [(ngModel)]="editing.isFeatured" /> #1 Premyera</label>
+          <label class="ck"><input type="checkbox" [(ngModel)]="editing.isTrending" /> Trend</label>
+          <label class="lb">Narxi (so'm)</label>
+          <input class="in" type="number" [(ngModel)]="editing.price" placeholder="15000" />
+        </div>
+
+        <label class="lb">Tavsif</label>
+        <textarea class="in" rows="3" [(ngModel)]="editing.description" placeholder="Kino haqida qisqacha..."></textarea>
+
+        <div *ngIf="editing.type !== 'movie'" class="eps">
+          <div class="epsh">
+            <span class="lb">Epizodlar ({{ episodes.length }})</span>
+            <button class="b b-gray" (click)="addEpisode()">+ Qism qo'shish</button>
+          </div>
+          <div class="ep" *ngFor="let ep of episodes; let i = index">
+            <div class="epn">{{ ep.episodeNumber }}-qism</div>
+            <input class="in" [(ngModel)]="ep.title" placeholder="Qism nomi" />
+            <label class="drop sm">
+              <span *ngIf="!up['ep' + i]">{{ ep.videoUrl ? 'Video tayyor (almashtirish)' : 'Video tanlang' }}</span>
+              <span *ngIf="up['ep' + i]">{{ up['ep' + i].status === 'ok' ? 'Yuklandi' : (up['ep' + i].progress + '%') }}</span>
+              <input type="file" accept="video/*" (change)="onEpisodeFile($event, i)" hidden />
+            </label>
+            <input class="in" [(ngModel)]="ep.videoUrl" placeholder="yoki video URL" />
+            <button class="ib d" (click)="removeEpisode(i)">&#10005;</button>
+          </div>
+        </div>
+
+        <label class="ck big" *ngIf="!editing.id">
+          <input type="checkbox" [(ngModel)]="shouldBroadcast" /> Saqlangach Telegramda barchaga e'lon qilish
+        </label>
+
+        <p class="er" *ngIf="formError">{{ formError }}</p>
+
+        <div class="foot">
+          <button class="b b-gray" (click)="closeEditor()">Bekor</button>
+          <button class="b b-red" [disabled]="saving || uploading()" (click)="save()">
+            {{ saving ? 'Saqlanmoqda...' : (uploading() ? 'Yuklanmoqda...' : 'Saqlash') }}
+          </button>
+        </div>
       </div>
     </div>
   `,
-  styles: [
-    `
-      .admin-input {
-        width: 100%;
-        background: rgba(255, 255, 255, 0.07);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        padding: 10px 14px;
-        color: #fff;
-        font-size: 0.875rem;
-        outline: none;
-        box-sizing: border-box;
-      }
-      .section-card {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        padding: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-      }
-      .section-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.7);
-        margin-bottom: 12px;
-      }
-      .content-row-card {
-        display: flex;
-        align-items: center;
-        background: rgba(255, 255, 255, 0.04);
-        border-radius: 10px;
-        padding: 10px;
-        margin-bottom: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .row-poster {
-        width: 48px;
-        height: 64px;
-        object-fit: cover;
-        border-radius: 8px;
-      }
-      .badge-xs {
-        font-size: 0.65rem;
-        padding: 2px 6px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.6);
-      }
-      .badge-xs.vip {
-        background: rgba(255, 215, 0, 0.2);
-        color: #ffd700;
-      }
-      .badge-xs.trend {
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-      }
-      .badge-xs.ready {
-        background: rgba(34, 197, 94, 0.2);
-        color: #22c55e;
-      }
-      .badge-xs.pending {
-        background: rgba(251, 191, 36, 0.15);
-        color: #fbbf24;
-      }
-      .btn-xs {
-        padding: 5px 10px;
-        border-radius: 8px;
-        border: none;
-        font-size: 0.75rem;
-        cursor: pointer;
-      }
-      .neutral {
-        background: rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.7);
-      }
-      .danger {
-        background: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
-      }
-      .upload-area {
-        border: 1px dashed rgba(255, 255, 255, 0.15);
-        border-radius: 8px;
-        padding: 10px;
-      }
-    `,
-  ],
+  styles: [`
+    .ct { padding: 16px; color: #fff; }
+    .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .h { font-size: 1rem; font-weight: 800; margin: 0; }
+    .sub { font-size: 0.72rem; color: #a1a1aa; margin: 3px 0 0; }
+    .b { border: none; border-radius: 12px; padding: 10px 14px; font-size: 0.78rem; font-weight: 800; cursor: pointer; color: #fff; }
+    .b-red { background: #dc2626; }
+    .b-gray { background: #27272a; color: #d4d4d8; }
+    .b:disabled { opacity: 0.5; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .chip { border: none; border-radius: 8px; padding: 6px 12px; font-size: 0.72rem; font-weight: 700; background: #27272a; color: #a1a1aa; white-space: nowrap; cursor: pointer; }
+    .chip.on { background: #fff; color: #000; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 8px; }
+    @media (min-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card { display: flex; gap: 10px; padding: 10px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; }
+    .cp { width: 64px; height: 90px; object-fit: cover; border-radius: 8px; background: #09090b; flex-shrink: 0; }
+    .ci { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+    .ct-t { font-size: 0.8rem; font-weight: 800; }
+    .meta { font-size: 0.68rem; color: #a1a1aa; margin-top: 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .ty { color: #f87171; font-weight: 700; text-transform: uppercase; }
+    .price { color: #34d399; font-weight: 800; }
+    .tag { font-size: 0.6rem; background: #451a03; color: #fcd34d; border-radius: 4px; padding: 1px 5px; }
+    .tag.g { background: #27272a; color: #d4d4d8; }
+    .am { color: #fbbf24; }
+    .act { display: flex; justify-content: flex-end; gap: 6px; padding-top: 6px; border-top: 1px solid #27272a; margin-top: 6px; }
+    .ib { border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; border-radius: 8px; padding: 5px 9px; cursor: pointer; font-size: 0.8rem; }
+    .ib.d { color: #f87171; }
+    .empty { text-align: center; color: #71717a; padding: 24px; font-size: 0.85rem; }
+    .ok { color: #34d399; font-size: 0.8rem; margin-top: 10px; }
+    .er { color: #fca5a5; font-size: 0.8rem; margin-top: 10px; }
+    .ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.9); display: flex; align-items: flex-start; justify-content: center; padding: 12px; overflow-y: auto; }
+    .md { position: relative; width: 100%; max-width: 640px; background: #121216; border: 1px solid #27272a; border-radius: 14px; padding: 16px; margin: auto; }
+    .x { position: absolute; top: 10px; right: 10px; border: none; background: #27272a; color: #a1a1aa; border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+    .mh { font-size: 1rem; font-weight: 900; margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #27272a; }
+    .lb { display: block; font-size: 0.66rem; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 4px; }
+    .in { width: 100%; box-sizing: border-box; background: #18181b; border: 1px solid #3f3f46; border-radius: 10px; padding: 9px 11px; color: #fff; font-size: 0.82rem; outline: none; font-family: inherit; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .mt { margin-top: 10px; }
+    .box { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 10px; }
+    .prev { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
+    .drop { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 60px; margin-bottom: 6px; border: 2px dashed #3f3f46; border-radius: 10px; background: #09090b; color: #d4d4d8; font-size: 0.75rem; cursor: pointer; padding: 8px; }
+    .drop.sm { min-height: 36px; margin: 6px 0; }
+    .bar { height: 4px; background: #27272a; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .fill { height: 4px; background: #dc2626; transition: width 0.2s; }
+    .mon { margin-top: 10px; padding: 10px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
+    .ck { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 700; padding: 6px 0; }
+    .ck.big { margin-top: 12px; color: #60a5fa; }
+    .eps { margin-top: 12px; padding: 10px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
+    .epsh { display: flex; justify-content: space-between; align-items: center; }
+    .ep { display: flex; flex-direction: column; gap: 4px; padding: 8px; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
+    .epn { font-size: 0.72rem; font-weight: 800; color: #fbbf24; }
+    .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  `],
 })
 export class AdminContentComponent implements OnInit {
   items: any[] = [];
+  catalogs: any[] = [];
   loading = false;
-  showForm = false;
+  filter = 'all';
+  filters = [
+    { v: 'all', t: 'Barchasi' },
+    { v: 'movie', t: 'Kinolar' },
+    { v: 'series', t: 'Seriallar' },
+    { v: 'anime_series', t: 'Animelar' },
+    { v: 'short_drama', t: 'Mini Dramalar' },
+  ];
+
   editing: any = null;
+  episodes: any[] = [];
+  genresText = '';
+  shouldBroadcast = false;
   saving = false;
-  query = '';
-  page = 1;
-  limit = 10;
-  totalPages = 1;
-  posterUrl = '';
-  posterFile: File | null = null;
-  form!: FormGroup;
+  formError = '';
+  okMsg = '';
+  error = '';
+  up: Record<string, UploadState> = {};
+
+  private readonly origin = environment.apiUrl.replace(/\/api\/v1\/?$/, '');
 
   constructor(
-    private api: ApiService,
-    private fb: FormBuilder,
-  ) {
-    this.initForm();
-  }
+    private readonly api: ApiService,
+    private readonly adminApi: AdminApiService,
+    private readonly http: HttpClient,
+  ) {}
 
-  get formTitle(): string {
-    return this.editing ? 'Tahrirlash' : 'Yangi kontent qoshish';
-  }
-
-  get submitLabel(): string {
-    if (this.saving) return 'Saqlanmoqda...';
-    return this.editing ? 'Saqlash' : 'Qoshish';
-  }
-
-  ngOnInit() {
+  ngOnInit(): void {
     this.load();
-  }
-
-  initForm(data: any = {}) {
-    this.form = this.fb.group({
-      title: [data.title || '', Validators.required],
-      originalTitle: [data.originalTitle || ''],
-      type: [data.type || 'movie'],
-      year: [data.year || ''],
-      duration: [data.duration || ''],
-      description: [data.description || ''],
-      genres: [Array.isArray(data.genres) ? data.genres.join(',') : data.genres || ''],
-      isPremium: [data.isPremium || false],
-      isTrending: [data.isTrending || false],
-      isFeatured: [data.isFeatured || false],
+    this.adminApi.getCatalogs().subscribe({
+      next: (r: any) => { this.catalogs = (r && r.catalogs) || (Array.isArray(r) ? r : []); },
+      error: () => { this.catalogs = []; },
     });
   }
 
-  load() {
+  abs(u: string | null | undefined): string {
+    if (!u) { return ''; }
+    return u.charAt(0) === '/' ? this.origin + u : u;
+  }
+
+  visible(): any[] {
+    return this.items.filter((c) => this.filter === 'all' || c.type === this.filter);
+  }
+
+  load(): void {
     this.loading = true;
-    const params: any = { page: this.page, limit: this.limit };
-    if (this.query.trim()) params.search = this.query.trim();
-    this.api.getContent(params).subscribe({
-      next: (r: any) => {
-        this.items = r.data;
-        this.totalPages = r.totalPages;
-        this.loading = false;
-      },
-      error: () => (this.loading = false),
+    this.api.getContent({ page: 1, limit: 100 }).subscribe({
+      next: (r: any) => { this.items = r.data || []; this.loading = false; },
+      error: () => { this.loading = false; this.error = 'Kontent ro\'yxati yuklanmadi'; },
     });
   }
 
-  onSearch() {
-    this.page = 1;
-    this.load();
+  openEditor(item?: any): void {
+    this.formError = '';
+    this.up = {};
+    this.shouldBroadcast = false;
+    if (item) {
+      this.editing = Object.assign({}, item);
+      this.genresText = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genres || '');
+      this.editing.catalogId = item.catalogId || '';
+      this.api.getContentById(item.id).subscribe({
+        next: (full: any) => { this.episodes = (full.episodes || []).map((e: any) => Object.assign({}, e)); },
+        error: () => { this.episodes = []; },
+      });
+      this.episodes = [];
+    } else {
+      this.editing = {
+        title: '', originalTitle: '', type: 'movie', catalogId: '', posterUrl: '', videoUrl: '',
+        description: '', year: new Date().getFullYear(), duration: '', rating: 7.5, price: 0,
+        isPremium: false, isVipIncluded: true, isSinglePurchase: false, isFeatured: false, isTrending: false,
+      };
+      this.genresText = '';
+      this.episodes = [];
+    }
   }
 
-  openAddForm() {
+  closeEditor(): void {
     this.editing = null;
-    this.initForm();
-    this.posterUrl = '';
-    this.showForm = true;
+    this.up = {};
   }
 
-  edit(item: any) {
-    this.editing = item;
-    this.initForm(item);
-    this.posterUrl = item.posterUrl || '';
-    this.showForm = true;
+  onCatalog(id: string): void {
+    const k = this.catalogs.find((c) => c.id === id);
+    if (k && k.format === 'vertical_9_16') { this.editing.type = 'short_drama'; }
   }
 
-  cancelForm() {
-    this.showForm = false;
-    this.editing = null;
+  addEpisode(): void {
+    const n = this.episodes.length + 1;
+    this.episodes.push({ seasonNumber: 1, episodeNumber: n, title: n + '-qism', videoUrl: '' });
   }
 
-  onPosterChange(event: any) {
-    const file: File = event.target.files[0];
-    if (!file) return;
-    this.posterFile = file;
-    this.api.uploadPoster(file).subscribe({
-      next: (r: any) => {
-        this.posterUrl = r.url;
+  removeEpisode(i: number): void {
+    this.episodes.splice(i, 1);
+    this.episodes.forEach((e, idx) => { e.episodeNumber = idx + 1; });
+    this.up = {};
+  }
+
+  uploading(): boolean {
+    return Object.keys(this.up).some((k) => this.up[k].status === 'loading');
+  }
+
+  onFile(ev: Event, kind: 'poster' | 'video'): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) { return; }
+    this.doUpload(file, kind, kind, (url) => {
+      if (kind === 'poster') { this.editing.posterUrl = url; } else { this.editing.videoUrl = url; }
+    });
+    input.value = '';
+  }
+
+  onEpisodeFile(ev: Event, i: number): void {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) { return; }
+    this.doUpload(file, 'video', 'ep' + i, (url) => { this.episodes[i].videoUrl = url; });
+    input.value = '';
+  }
+
+  private doUpload(file: File, kind: 'poster' | 'video', key: string, done: (url: string) => void): void {
+    const fd = new FormData();
+    fd.append(kind, file);
+    this.up[key] = { progress: 0, status: 'loading' };
+    this.formError = '';
+    this.http.post<any>(environment.apiUrl + '/upload/' + kind, fd, { reportProgress: true, observe: 'events' }).subscribe({
+      next: (e: any) => {
+        if (e.type === HttpEventType.UploadProgress && e.total) {
+          this.up[key] = { progress: Math.round((100 * e.loaded) / e.total), status: 'loading' };
+        } else if (e.type === HttpEventType.Response) {
+          const b = e.body || {};
+          let url: string = b.url || (b.filename ? '/uploads/videos/' + b.filename : '');
+          if (url && url.charAt(0) === '/') { url = this.origin + url; }
+          this.up[key] = { progress: 100, status: 'ok' };
+          done(url);
+        }
+      },
+      error: (err: any) => {
+        delete this.up[key];
+        this.formError = 'Yuklash xatosi: ' + ((err && err.error && err.error.message) || (err && err.status) || 'server javob bermadi');
       },
     });
   }
 
-  save() {
-    if (this.form.invalid) return;
-    this.saving = true;
-    const raw: any = this.form.value;
+  save(): void {
+    const e = this.editing;
+    this.formError = '';
+    if (!e.title || !String(e.title).trim()) { this.formError = 'Kontent nomini kiriting'; return; }
+    if (!e.posterUrl || !String(e.posterUrl).trim()) { this.formError = 'Poster rasmini yuklang yoki URL kiriting'; return; }
+    if (e.type === 'movie' && (!e.videoUrl || !String(e.videoUrl).trim())) { this.formError = 'Video faylni yuklang yoki URL kiriting'; return; }
+    if (e.type !== 'movie' && this.episodes.length === 0) { this.formError = 'Kamida 1 ta epizod qo\'shing'; return; }
+
+    const genres = this.genresText.split(',').map((g) => g.trim()).filter((g) => g.length > 0);
     const data: any = {
-      ...raw,
-      genres: raw.genres
-        ? raw.genres
-            .split(',')
-            .map((g: string) => g.trim())
-            .filter(Boolean)
-        : [],
+      title: String(e.title).trim(),
+      originalTitle: e.originalTitle || null,
+      type: e.type,
+      catalogId: e.catalogId || null,
+      posterUrl: e.posterUrl,
+      bannerUrl: e.bannerUrl || e.posterUrl,
+      videoUrl: e.type === 'movie' ? e.videoUrl : null,
+      description: e.description || null,
+      year: Number(e.year) || null,
+      duration: e.duration || null,
+      rating: Number(e.rating) || 0,
+      genres: genres,
+      isPremium: !!e.isPremium,
+      isVipIncluded: e.isVipIncluded !== false,
+      isSinglePurchase: !!e.isSinglePurchase,
+      price: Number(e.price) || 0,
+      isTrending: !!e.isTrending,
+      isFeatured: !!e.isFeatured,
     };
-    if (this.posterUrl) data.posterUrl = this.posterUrl;
+    if (e.type !== 'movie') {
+      data.episodes = this.episodes.map((ep, i) => ({
+        seasonNumber: ep.seasonNumber || 1,
+        episodeNumber: i + 1,
+        title: ep.title || (i + 1) + '-qism',
+        videoUrl: ep.videoUrl || null,
+      }));
+    }
 
-    const req = this.editing
-      ? this.api.updateContent(this.editing.id, data)
-      : this.api.createContent(data);
-
+    this.saving = true;
+    const isNew = !e.id;
+    const req = isNew ? this.api.createContent(data) : this.api.updateContent(e.id, data);
     req.subscribe({
       next: (saved: any) => {
         this.saving = false;
-        this.showForm = false;
-        if (this.editing) {
-          const idx = this.items.findIndex((i) => i.id === saved.id);
-          if (idx >= 0) this.items[idx] = saved;
-        } else {
-          this.items.unshift(saved);
-        }
+        const announceIt = isNew && this.shouldBroadcast;
+        this.closeEditor();
+        this.okMsg = 'Saqlandi: ' + saved.title;
+        this.load();
+        if (announceIt) { this.sendAnnounce(saved); }
       },
-      error: () => (this.saving = false),
-    });
-  }
-
-  delete(item: any) {
-    if (!confirm(item.title + ' ochirilsinmi?')) return;
-    this.api.deleteContent(item.id).subscribe({
-      next: () => {
-        this.items = this.items.filter((i) => i.id !== item.id);
+      error: (err: any) => {
+        this.saving = false;
+        const m = err && err.error && err.error.message;
+        this.formError = 'Saqlanmadi: ' + (Array.isArray(m) ? m.join(', ') : (m || err.status || 'server xatosi'));
       },
     });
   }
 
-  prevPage() {
-    if (this.page > 1) {
-      this.page--;
-      this.load();
-    }
+  remove(c: any): void {
+    if (!confirm(c.title + ' o\'chirilsinmi?')) { return; }
+    this.api.deleteContent(c.id).subscribe({
+      next: () => { this.items = this.items.filter((i) => i.id !== c.id); },
+      error: () => { this.error = 'O\'chirilmadi'; },
+    });
   }
 
-  nextPage() {
-    if (this.page < this.totalPages) {
-      this.page++;
-      this.load();
-    }
+  announce(c: any): void {
+    if (!confirm('"' + c.title + '" haqida barcha foydalanuvchilarga xabar yuborilsinmi?')) { return; }
+    this.sendAnnounce(c);
+  }
+
+  private esc(s: string): string {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  private sendAnnounce(c: any): void {
+    const kind = c.type === 'movie' ? 'kino' : (c.type === 'short_drama' ? 'mini drama' : 'serial');
+    const desc = String(c.description || '');
+    const text = '<b>Yangi ' + kind + ' qo\'shildi!</b>\n\n<b>' + this.esc(c.title) + '</b>\n\n' +
+      this.esc(desc.substring(0, 200)) + (desc.length > 200 ? '...' : '');
+    this.okMsg = '';
+    this.error = '';
+    this.adminApi.broadcast({
+      text: text,
+      photoUrl: this.abs(c.posterUrl),
+      buttonText: 'Tomosha qilish',
+      buttonUrl: window.location.origin + '/watch/' + c.id,
+      audience: 'all',
+    }).subscribe({
+      next: (r: any) => { this.okMsg = 'E\'lon yuborilmoqda (' + ((r && r.total) || 0) + ' foydalanuvchi)'; },
+      error: () => { this.error = 'E\'lon yuborilmadi'; },
+    });
   }
 }
