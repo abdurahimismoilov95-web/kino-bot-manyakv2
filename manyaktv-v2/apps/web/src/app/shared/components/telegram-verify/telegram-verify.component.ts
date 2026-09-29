@@ -5,18 +5,6 @@ import { StorageService } from '../../../core/services/storage.service';
 
 type Phase = 'idle' | 'starting' | 'waiting' | 'in_bot' | 'verified' | 'error';
 
-/**
- * manyak-tv1 TelegramVerificationModal.tsx + TelegramAuthModal.tsx ko'chirmasi.
- *
- * Oqim (serverda tekshiriladi, soxta tasdiqlash yo'q):
- *   1. sayt  -> POST /verify/start        -> { code, deepLink }
- *   2. foydalanuvchi botni ochadi (deep link) -> bot kontakt so'raydi
- *   3. foydalanuvchi KONTAKTINI yuboradi
- *   4. server contact.user_id === from.id ni tekshiradi
- *   5. sayt  -> GET /verify/status?code=  -> { verified, token, user }
- *
- * Telegram Mini App ichida bo'lsa tg.requestContact() ishlatiladi.
- */
 @Component({
   selector: 'app-telegram-verify',
   template: `
@@ -28,8 +16,8 @@ type Phase = 'idle' | 'starting' | 'waiting' | 'in_bot' | 'verified' | 'error';
           <div class="tv-ico">&#9993;</div>
           <h3>Telegram Profil Orqali Tasdiqlash</h3>
           <p>
-            Sayt va rasmiy <b>&#64;{{ botUsername }}</b> boti integratsiyasi.
-            Profilingizni bot orqali tasdiqlang.
+            Ilovaga kirish uchun rasmiy <b>&#64;{{ botUsername }}</b> botida
+            kontaktingizni yuborib, profilingizni tasdiqlang.
           </p>
         </div>
 
@@ -206,17 +194,12 @@ export class TelegramVerifyComponent implements OnDestroy {
     });
   }
 
-  /** Telegram ichida bo'lsa kontaktni to'g'ridan-to'g'ri so'raymiz. */
+  /**
+   * Botni deep link (start=v_KOD) bilan ochamiz: kod botga yetib boradi
+   * va kontakt shu sessiyaga bogланади.
+   */
   openLink(): void {
     const tg = this.tg();
-    if (tg && typeof tg.requestContact === 'function') {
-      try {
-        tg.requestContact(() => { this.phase = 'in_bot'; });
-        return;
-      } catch {
-        /* qollab-quvvatlanmasa deep link bilan davom etamiz */
-      }
-    }
     const link = this.deepLink || ('https://t.me/' + this.botUsername);
     if (tg && typeof tg.openTelegramLink === 'function') {
       try {
@@ -238,14 +221,10 @@ export class TelegramVerifyComponent implements OnDestroy {
       this.http.get<any>(url).subscribe({
         next: (d: any) => {
           if (!d) { return; }
-          if (d.status === 'expired') {
+          if (d.status === 'expired' || d.expired) {
             this.stop();
             this.phase = 'error';
             this.error = 'Tasdiqlash kodi muddati tugadi. Iltimos, qaytadan boshlang.';
-            return;
-          }
-          if (d.status === 'awaiting_contact') {
-            this.phase = 'in_bot';
             return;
           }
           if (d.verified && d.token && d.user) {
@@ -256,7 +235,7 @@ export class TelegramVerifyComponent implements OnDestroy {
             setTimeout(() => { this.verified.emit(d.user); }, 900);
           }
         },
-        error: () => { /* tarmoq uzilishi - keyingi urinishda davom etadi */ },
+        error: () => { /* keyingi urinishda davom etadi */ },
       });
     }, 2000);
   }
