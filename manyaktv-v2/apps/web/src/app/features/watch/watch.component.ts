@@ -429,6 +429,8 @@ export class WatchComponent implements OnInit, OnDestroy {
       const n = this.episodes[i + 1];
       this.showNotice(hint || ('Keyingi ' + (n.episodeNumber || (i + 2)) + '-qism'), 1);
       this.selectEpisode(n);
+    } else {
+      this.showNotice('Oxirgi qism', 1);
     }
   }
 
@@ -438,6 +440,8 @@ export class WatchComponent implements OnInit, OnDestroy {
       const p = this.episodes[i - 1];
       this.showNotice('Oldingi ' + (p.episodeNumber || i) + '-qism', -1);
       this.selectEpisode(p);
+    } else {
+      this.showNotice('Birinchi qism', -1);
     }
   }
 
@@ -454,14 +458,26 @@ export class WatchComponent implements OnInit, OnDestroy {
     this.wake();
   }
 
+  /**
+   * Ekranni surish: mini drama - tepaga/pastga, serial/anime/kino qismlari - chapga/ongga.
+   * Boshqaruv paneli (seek, tugmalar) ustida surish hisobga olinmaydi.
+   */
   tEnd(e: TouchEvent): void {
-    if (!this.isVertical || this.sheet || this.locked) { return; }
+    if (this.sheet || this.locked || this.episodes.length < 2) { return; }
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest && target.closest('.pl-ctrl, .pl-top, .pl-sheet-wrap, button')) { return; }
     const t = e.changedTouches[0];
     if (!t) { return; }
-    const dy = this.ty - t.clientY;
-    const dx = Math.abs(this.tx - t.clientX);
-    if (Math.abs(dy) > 70 && dx < 50) {
-      if (dy > 0) { this.goNext(); } else { this.goPrev(); }
+    const sy = this.ty - t.clientY;
+    const sx = this.tx - t.clientX;
+    const ay = Math.abs(sy);
+    const ax = Math.abs(sx);
+    if (this.isVertical) {
+      if (ay > 70 && ax < 50 && ay > ax) {
+        if (sy > 0) { this.goNext(); } else { this.goPrev(); }
+      }
+    } else if (ax > 80 && ay < 60 && ax > ay) {
+      if (sx > 0) { this.goNext(); } else { this.goPrev(); }
     }
   }
 
