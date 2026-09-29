@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { StorageService } from '../../core/services/storage.service';
 
-/** manyak-tv1 HomeView.tsx dizayni */
+/** Bosh sahifa: faqat 4 bolim - Mini drama, Kino, Serial, Anime */
 @Component({
   selector: 'app-home',
   template: `
@@ -33,18 +33,11 @@ import { StorageService } from '../../core/services/storage.service';
       </div>
 
       <div class="hm-pad hm-chips">
-        <button class="hm-chip" [class.hm-chip-on]="activeType === null && !showNewOnly"
+        <button class="hm-chip" [class.hm-chip-on]="activeType === null"
                 (click)="setType(null)">Barchasi</button>
-
-        <button class="hm-chip hm-chip-new" *ngIf="newItems.length"
-                [class.hm-chip-new-on]="showNewOnly"
-                (click)="toggleNew()">
-          &#10022; Yangi kinolar ({{ newItems.length }})
-        </button>
-
-        <button class="hm-chip" *ngFor="let t of types"
-                [class.hm-chip-on]="activeType === t.value && !showNewOnly"
-                (click)="setType(t.value)">{{ t.label }}</button>
+        <button class="hm-chip" *ngFor="let s of sections"
+                [class.hm-chip-on]="activeType === s.type"
+                (click)="setType(s.type)">{{ s.label }}</button>
       </div>
 
       <div class="hm-pad" *ngIf="!isVip">
@@ -61,64 +54,58 @@ import { StorageService } from '../../core/services/storage.service';
         </div>
       </div>
 
-      <section class="hm-pad" *ngIf="!showNewOnly && (loadingTrending || trending.length)">
-        <div class="hm-head">
-          <h2 class="hm-section">&#128293; Trendda</h2>
-        </div>
-        <app-skeleton-card *ngIf="loadingTrending" variant="row" [count]="6"></app-skeleton-card>
-        <div class="hm-row" *ngIf="!loadingTrending">
-          <app-content-card *ngFor="let item of trending"
-                            [item]="item" [hasAccess]="isVip"
-                            (click)="openWatch(item)"></app-content-card>
-        </div>
-      </section>
-
-      <section class="hm-pad" *ngIf="!showNewOnly && (loadingNew || newItems.length)">
-        <div class="hm-head">
-          <h2 class="hm-section">&#10022; Yangi qoshilgan</h2>
-        </div>
-        <app-skeleton-card *ngIf="loadingNew" variant="row" [count]="6"></app-skeleton-card>
-        <div class="hm-row" *ngIf="!loadingNew">
-          <app-content-card *ngFor="let item of newItems"
-                            [item]="item" [hasAccess]="isVip"
-                            (click)="openWatch(item)"></app-content-card>
-        </div>
-      </section>
-
-      <section class="hm-pad" *ngIf="!showNewOnly && shorts.length">
-        <div class="hm-head">
-          <h2 class="hm-section">&#9654; Mini dramalar</h2>
-          <button class="hm-all" (click)="goShorts()">Barchasi &#8250;</button>
-        </div>
-        <div class="hm-row">
-          <div class="sd" *ngFor="let item of shorts" (click)="goShorts()">
-            <img class="sd-img" [src]="posterOf(item)" [alt]="item?.title || ''" />
-            <div class="sd-shade"></div>
-            <span class="sd-hot">HOT</span>
-            <div class="sd-meta">
-              <h5 class="sd-title">{{ item?.title }}</h5>
-              <span class="sd-eps" *ngIf="item?.episodeCount">{{ item?.episodeCount }} qism</span>
+      <ng-container *ngIf="activeType === null">
+        <ng-container *ngFor="let s of sections">
+          <section class="hm-pad" *ngIf="s.loading || s.items.length">
+            <div class="hm-head">
+              <h2 class="hm-section">{{ s.label }}</h2>
+              <button class="hm-all" (click)="s.type === 'short_drama' ? goShorts() : setType(s.type)">Barchasi &#8250;</button>
             </div>
-          </div>
-        </div>
-      </section>
+            <app-skeleton-card *ngIf="s.loading" variant="row" [count]="6"></app-skeleton-card>
 
-      <section class="hm-pad">
-        <div class="hm-head">
-          <h2 class="hm-section">{{ gridTitle }}</h2>
-        </div>
-        <app-skeleton-card *ngIf="loading && !gridItems.length" variant="grid" [count]="9"></app-skeleton-card>
-        <div class="hm-grid">
-          <app-content-card *ngFor="let item of gridItems"
-                            [item]="item" [hasAccess]="isVip" variant="grid"
-                            (click)="openWatch(item)"></app-content-card>
-        </div>
-        <div class="hm-empty" *ngIf="!loading && !gridItems.length">
+            <div class="hm-row" *ngIf="!s.loading && s.type === 'short_drama'">
+              <div class="sd" *ngFor="let item of s.items" (click)="openWatch(item)">
+                <img class="sd-img" [src]="posterOf(item)" [alt]="item?.title || ''" />
+                <div class="sd-shade"></div>
+                <span class="sd-hot">HOT</span>
+                <div class="sd-meta">
+                  <h5 class="sd-title">{{ item?.title }}</h5>
+                  <span class="sd-eps" *ngIf="item?.episodeCount">{{ item?.episodeCount }} qism</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="hm-row" *ngIf="!s.loading && s.type !== 'short_drama'">
+              <app-content-card *ngFor="let item of s.items"
+                                [item]="item" [hasAccess]="isVip"
+                                (click)="openWatch(item)"></app-content-card>
+            </div>
+          </section>
+        </ng-container>
+
+        <div class="hm-empty" *ngIf="allEmpty">
           <div class="hm-empty-ico">&#9634;</div>
           <h4>Hozircha kontent yoq</h4>
           <p>Tez orada yangi kinolar qoshiladi.</p>
         </div>
-        <button class="hm-more" *ngIf="hasMore && !showNewOnly" [disabled]="loading" (click)="loadMore()">
+      </ng-container>
+
+      <section class="hm-pad" *ngIf="activeType !== null">
+        <div class="hm-head">
+          <h2 class="hm-section">{{ gridTitle }}</h2>
+        </div>
+        <app-skeleton-card *ngIf="loading && !content.length" variant="grid" [count]="9"></app-skeleton-card>
+        <div class="hm-grid">
+          <app-content-card *ngFor="let item of content"
+                            [item]="item" [hasAccess]="isVip" variant="grid"
+                            (click)="openWatch(item)"></app-content-card>
+        </div>
+        <div class="hm-empty" *ngIf="!loading && !content.length">
+          <div class="hm-empty-ico">&#9634;</div>
+          <h4>Hozircha kontent yoq</h4>
+          <p>Tez orada yangi kinolar qoshiladi.</p>
+        </div>
+        <button class="hm-more" *ngIf="hasMore" [disabled]="loading" (click)="loadMore()">
           {{ loading ? 'Yuklanmoqda...' : 'Yana korsatish' }}
         </button>
       </section>
@@ -166,11 +153,6 @@ import { StorageService } from '../../core/services/storage.service';
       border: 1px solid #27272a; transition: all 0.2s; cursor: pointer;
     }
     .hm-chip-on { background: #fff; color: #000; border-color: #fff; box-shadow: 0 4px 14px rgba(255,255,255,0.14); }
-    .hm-chip-new-on {
-      background: linear-gradient(90deg, #10b981, #16a34a);
-      color: #fff; border-color: transparent;
-      box-shadow: 0 6px 16px rgba(16,185,129,0.35);
-    }
     .vip-banner {
       position: relative; overflow: hidden; cursor: pointer;
       display: flex; align-items: center; justify-content: space-between;
@@ -245,29 +227,23 @@ import { StorageService } from '../../core/services/storage.service';
 })
 export class HomeComponent implements OnInit {
   heroItems: any[] = [];
-  trending: any[] = [];
-  newItems: any[] = [];
-  shorts: any[] = [];
   content: any[] = [];
   storeItems: any[] = [];
 
+  sections: Array<{ type: string; label: string; items: any[]; loading: boolean }> = [
+    { type: 'short_drama', label: 'Mini drama', items: [], loading: true },
+    { type: 'movie', label: 'Kino', items: [], loading: true },
+    { type: 'series', label: 'Serial', items: [], loading: true },
+    { type: 'anime_series', label: 'Anime', items: [], loading: true },
+  ];
+
   activeType: string | null = null;
-  showNewOnly = false;
   page = 1;
   hasMore = false;
   loading = false;
-  loadingTrending = true;
-  loadingNew = true;
 
   isVip = false;
   isAdmin = false;
-
-  types = [
-    { label: 'Kinolar', value: 'movie' },
-    { label: 'Seriallar', value: 'series' },
-    { label: 'Anime', value: 'anime_series' },
-    { label: 'Mini drama', value: 'short_drama' },
-  ];
 
   constructor(
     private readonly api: ApiService,
@@ -275,15 +251,13 @@ export class HomeComponent implements OnInit {
     private readonly storage: StorageService,
   ) {}
 
-  get gridItems(): any[] {
-    return this.showNewOnly ? this.newItems : this.content;
+  get gridTitle(): string {
+    const found = this.sections.find((s) => s.type === this.activeType);
+    return found ? found.label : '';
   }
 
-  get gridTitle(): string {
-    if (this.showNewOnly) { return 'Yangi kinolar'; }
-    if (!this.activeType) { return 'Barcha kinolar'; }
-    const found = this.types.find((t) => t.value === this.activeType);
-    return found ? found.label : 'Barcha kinolar';
+  get allEmpty(): boolean {
+    return this.sections.every((s) => !s.loading && s.items.length === 0);
   }
 
   ngOnInit(): void {
@@ -293,10 +267,7 @@ export class HomeComponent implements OnInit {
       this.isAdmin = u.role === 'admin' || u.role === 'super_admin' || !!u.isAdmin;
     }
     this.loadHero();
-    this.loadTrending();
-    this.loadNew();
-    this.loadShorts();
-    this.loadContent(true);
+    this.sections.forEach((s) => this.loadSection(s));
   }
 
   private loadHero(): void {
@@ -306,31 +277,17 @@ export class HomeComponent implements OnInit {
     });
   }
 
-  private loadTrending(): void {
-    this.api.getTrending().subscribe({
-      next: (r: any) => { this.trending = this.rows(r); this.loadingTrending = false; },
-      error: () => { this.loadingTrending = false; },
-    });
-  }
-
-  private loadNew(): void {
-    this.api.getContent({ page: 1, limit: 12 }).subscribe({
-      next: (r: any) => { this.newItems = this.rows(r); this.loadingNew = false; },
-      error: () => { this.loadingNew = false; },
-    });
-  }
-
-  private loadShorts(): void {
-    this.api.getContent({ page: 1, limit: 12, type: 'short_drama' }).subscribe({
-      next: (r: any) => { this.shorts = this.rows(r); },
-      error: () => { this.shorts = []; },
+  private loadSection(s: { type: string; items: any[]; loading: boolean }): void {
+    this.api.getContent({ page: 1, limit: 12, type: s.type }).subscribe({
+      next: (r: any) => { s.items = this.rows(r); s.loading = false; this.buildStore(); },
+      error: () => { s.loading = false; },
     });
   }
 
   loadContent(reset = false): void {
-    if (this.loading) { return; }
+    if (this.loading || !this.activeType) { return; }
     this.loading = true;
-    if (reset) { this.page = 1; }
+    if (reset) { this.page = 1; this.content = []; }
     this.api.getContent({ page: this.page, limit: 21, type: this.activeType }).subscribe({
       next: (r: any) => {
         const items = this.rows(r);
@@ -346,7 +303,8 @@ export class HomeComponent implements OnInit {
 
   /** v1: featuredStoreItems = isSinglePurchase || isFeaturedStore (isFeaturedStore birinchi) */
   private buildStore(): void {
-    const all = this.content.concat(this.trending).concat(this.newItems);
+    let all: any[] = this.content.slice();
+    this.sections.forEach((s) => { all = all.concat(s.items); });
     const seen: Record<string, boolean> = {};
     const picked: any[] = [];
     all.forEach((c) => {
@@ -365,13 +323,8 @@ export class HomeComponent implements OnInit {
   }
 
   setType(type: string | null): void {
-    this.showNewOnly = false;
     this.activeType = type;
-    this.loadContent(true);
-  }
-
-  toggleNew(): void {
-    this.showNewOnly = !this.showNewOnly;
+    if (type) { this.loadContent(true); }
   }
 
   loadMore(): void {
@@ -379,7 +332,6 @@ export class HomeComponent implements OnInit {
     this.loadContent();
   }
 
-  /** Karta bosilganda modal ochilmaydi - to'g'ridan-to'g'ri pleyer */
   openWatch(item: any): void {
     if (!item || !item.id) { return; }
     this.router.navigate(['/watch', item.id]);
@@ -387,7 +339,6 @@ export class HomeComponent implements OnInit {
 
   openPlans(): void { this.router.navigate(['/subscription']); }
 
-  /** Vitrinadan alohida kino sotib olish: chek sahifasi */
   buyItem(item: any): void {
     if (!item || !item.id) { this.openPlans(); return; }
     this.router.navigate(['/subscription'], {
