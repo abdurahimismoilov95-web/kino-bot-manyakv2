@@ -1,4 +1,5 @@
 import { Component, Input } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 
 /** manyak-tv1 ContentCard.tsx dizayni: nom, yil va narx poster ustida */
 @Component({
@@ -119,12 +120,21 @@ export class ContentCardComponent {
       '</svg>',
     );
 
+  /** Nisbiy /uploads/... yollarni API origin bilan toldiradi */
+  private abs(u?: string): string {
+    if (!u) { return ''; }
+    if (/^(https?:|data:|blob:)/i.test(u)) { return u; }
+    const origin = String(environment.apiUrl || '').replace(/\/api\/v\d+\/?$/, '').replace(/\/+$/, '');
+    return origin + (u.charAt(0) === '/' ? u : '/' + u);
+  }
+
   get title(): string { return this.item && this.item.title ? this.item.title : ''; }
   get year(): string { return this.item && this.item.year ? String(this.item.year) : ''; }
 
   get poster(): string {
     if (!this.item) { return this.fallback; }
-    return this.item.posterUrl || this.item.poster || this.item.thumbnailUrl || this.fallback;
+    const raw = this.item.posterUrl || this.item.poster || this.item.thumbnailUrl;
+    return this.abs(raw) || this.fallback;
   }
 
   get price(): number {
