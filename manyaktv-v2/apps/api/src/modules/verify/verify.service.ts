@@ -66,6 +66,14 @@ export class VerifyService {
     return out;
   }
 
+  /** Telefon raqamini +998901234567 korinishiga keltiradi */
+  private normalizePhone(raw?: string): string | null {
+    if (!raw) return null;
+    const digits = String(raw).replace(/[^0-9]/g, '');
+    if (!digits) return null;
+    return ('+' + digits).slice(0, 20);
+  }
+
   start(): { code: string; deepLink: string; expiresIn: number } {
     this.sweep();
     const code = this.newCode();
@@ -139,9 +147,7 @@ export class VerifyService {
     }
 
     const telegramId = String(from.id);
-    const phone = contact.phone_number
-      ? String(contact.phone_number).slice(0, 20)
-      : null;
+    const phone = this.normalizePhone(contact.phone_number);
     let user = await this.userRepo.findOne({ where: { telegramId } });
 
     if (!user) {
@@ -171,7 +177,7 @@ export class VerifyService {
     session.token = this.jwtService.sign({ sub: user.id, role: user.role });
     this.sessions.set(code, session);
 
-    this.logger.log('Tasdiqlandi: ' + telegramId + ' (' + code + ')');
+    this.logger.log('Tasdiqlandi: ' + telegramId + ' tel=' + (phone || '-') + ' (' + code + ')');
     return { ok: true };
   }
 }
