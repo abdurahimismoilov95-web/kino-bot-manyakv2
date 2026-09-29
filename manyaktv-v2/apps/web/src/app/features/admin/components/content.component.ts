@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { AdminApiService } from './admin-api.service';
 import { environment } from '../../../../environments/environment';
 
@@ -40,9 +41,9 @@ interface UploadState { progress: number; status: string; name: string; }
               <div class="meta am" *ngIf="c.episodes && c.episodes.length">{{ c.episodes.length }} ta epizod</div>
             </div>
             <div class="act">
-              <button class="ib" title="Telegramda e'lon qilish" (click)="announce(c)">&#128227;</button>
-              <button class="ib" title="Tahrirlash" (click)="openEditor(c)">&#9998;</button>
-              <button class="ib d" title="O'chirish" (click)="remove(c)">&#10005;</button>
+              <button class="ib" title="Telegramda e'lon qilish" (click)="announce(c)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 8a5 5 0 0 1 0 8"/></svg></button>
+              <button class="ib" title="Tahrirlash" (click)="openEditor(c)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+              <button class="ib d" title="O'chirish" (click)="remove(c)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
             </div>
           </div>
         </div>
@@ -54,7 +55,7 @@ interface UploadState { progress: number; status: string; name: string; }
 
     <div class="ov" *ngIf="editing">
       <div class="md">
-        <button class="x" (click)="closeEditor()">&#10005;</button>
+        <button class="x" (click)="closeEditor()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         <h3 class="mh">{{ editing.id ? 'Kontentni Tahrirlash' : 'Yangi Kontent' }}</h3>
 
         <label class="lb">Nomi</label>
@@ -133,8 +134,8 @@ interface UploadState { progress: number; status: string; name: string; }
             <div class="ecard" *ngFor="let ep of episodes; let i = index">
               <div class="eth">
                 <img *ngIf="editing.posterUrl" class="eimg" [src]="abs(editing.posterUrl)" alt="" />
-                <span class="eok" *ngIf="ep.videoUrl">&#10003;</span>
-                <span class="ebad" *ngIf="!ep.videoUrl">&#10005;</span>
+                <span class="eok" *ngIf="ep.videoUrl"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                <span class="ebad" *ngIf="!ep.videoUrl"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
                 <div class="eprog" *ngIf="up['ep' + i]">
                   <div class="ept">{{ up['ep' + i].status === 'ok' ? '100%' : (up['ep' + i].progress + '%') }}</div>
                   <div class="epb"><div class="epf" [class.done]="up['ep' + i].status === 'ok'" [style.width.%]="up['ep' + i].progress"></div></div>
@@ -199,14 +200,14 @@ interface UploadState { progress: number; status: string; name: string; }
     .tag.g { background: #27272a; color: #d4d4d8; }
     .am { color: #fbbf24; }
     .act { display: flex; justify-content: flex-end; gap: 6px; padding-top: 6px; border-top: 1px solid #27272a; margin-top: 6px; }
-    .ib { border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; border-radius: 8px; padding: 5px 9px; cursor: pointer; font-size: 0.8rem; }
+    .ib { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; border-radius: 8px; padding: 6px 9px; cursor: pointer; }
     .ib.d { color: #f87171; }
     .empty { text-align: center; color: #71717a; padding: 24px; font-size: 0.85rem; }
     .ok { color: #34d399; font-size: 0.8rem; margin-top: 10px; }
     .er { color: #fca5a5; font-size: 0.8rem; margin-top: 10px; }
     .ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.9); display: flex; align-items: flex-start; justify-content: center; padding: 12px; overflow-y: auto; }
     .md { position: relative; width: 100%; max-width: 520px; background: #121216; border: 1px solid #27272a; border-radius: 14px; padding: 16px; margin: auto; }
-    .x { position: absolute; top: 10px; right: 10px; border: none; background: #27272a; color: #a1a1aa; border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+    .x { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; border: none; background: #27272a; color: #a1a1aa; border-radius: 8px; padding: 6px; cursor: pointer; }
     .mh { font-size: 1rem; font-weight: 900; margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #27272a; }
     .lb { display: block; font-size: 0.68rem; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 5px; }
     .lb.first { margin-top: 0; }
@@ -280,6 +281,7 @@ export class AdminContentComponent implements OnInit {
     private readonly api: ApiService,
     private readonly adminApi: AdminApiService,
     private readonly http: HttpClient,
+    private readonly dlg: DialogService,
   ) {}
 
   ngOnInit(): void {
@@ -352,9 +354,13 @@ export class AdminContentComponent implements OnInit {
   }
 
   removeEpisode(i: number): void {
-    this.episodes.splice(i, 1);
-    this.episodes.forEach((e, idx) => { e.episodeNumber = idx + 1; });
-    this.up = {};
+    const ep = this.episodes[i];
+    this.dlg.confirm((ep && ep.episodeNumber ? ep.episodeNumber + '-qism' : 'Qism') + ' o\'chirilsinmi?', { title: 'Qismni o\'chirish', okText: 'O\'chirish', danger: true }).then((ok) => {
+      if (!ok) { return; }
+      this.episodes.splice(i, 1);
+      this.episodes.forEach((e, idx) => { e.episodeNumber = idx + 1; });
+      this.up = {};
+    });
   }
 
   uploading(): boolean {
@@ -468,16 +474,20 @@ export class AdminContentComponent implements OnInit {
   }
 
   remove(c: any): void {
-    if (!confirm(c.title + ' o\'chirilsinmi?')) { return; }
-    this.api.deleteContent(c.id).subscribe({
-      next: () => { this.items = this.items.filter((i) => i.id !== c.id); },
-      error: () => { this.error = 'O\'chirilmadi'; },
+    this.dlg.confirm('"' + c.title + '" butunlay o\'chirilsinmi? Bu amalni qaytarib bo\'lmaydi.', { title: 'Kontentni o\'chirish', okText: 'O\'chirish', danger: true }).then((ok) => {
+      if (!ok) { return; }
+      this.api.deleteContent(c.id).subscribe({
+        next: () => { this.items = this.items.filter((i) => i.id !== c.id); this.okMsg = 'O\'chirildi: ' + c.title; },
+        error: () => { this.error = 'O\'chirilmadi'; },
+      });
     });
   }
 
   announce(c: any): void {
-    if (!confirm('"' + c.title + '" haqida barcha foydalanuvchilarga xabar yuborilsinmi?')) { return; }
-    this.sendAnnounce(c);
+    this.dlg.confirm('"' + c.title + '" haqida barcha foydalanuvchilarga xabar yuborilsinmi?', { title: 'Telegramda e\'lon qilish', okText: 'Yuborish' }).then((ok) => {
+      if (!ok) { return; }
+      this.sendAnnounce(c);
+    });
   }
 
   private esc(s: string): string {
