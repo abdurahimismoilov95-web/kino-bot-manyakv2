@@ -1,33 +1,38 @@
 import { Component, Input } from '@angular/core';
 
-/** manyak-tv1 ContentCard.tsx dizayni */
+/** manyak-tv1 ContentCard.tsx dizayni: nom, yil va narx poster ustida */
 @Component({
   selector: 'app-content-card',
   template: `
     <div class="cc" [class.cc-grid]="variant === 'grid'">
-      <div class="cc-poster">
-        <img [src]="poster" [alt]="title" loading="lazy" (error)="onImgError($event)" />
-        <div class="cc-shade"></div>
-
-        <div class="cc-badges">
-          <span class="cc-badge cc-b-new" *ngIf="isNew">YANGI</span>
-          <span class="cc-badge cc-b-vip" *ngIf="locked">&#128274; VIP</span>
-          <span class="cc-badge cc-b-free" *ngIf="!isPremium">BEPUL</span>
-        </div>
-
-        <div class="cc-rating" *ngIf="rating">&#9733; {{ rating }}</div>
-
-        <div class="cc-play"><span>&#9654;</span></div>
-
-        <div class="cc-eps" *ngIf="episodesLabel">{{ episodesLabel }}</div>
+      <div class="cc-ph" *ngIf="!loaded">
+        <div class="cc-phi">&#9654;</div>
+        <span class="cc-pht">MANYAK TV</span>
       </div>
 
-      <div class="cc-meta">
+      <img class="cc-img" [class.on]="loaded" [src]="poster" [alt]="title" loading="lazy"
+           (load)="loaded = true" (error)="onImgError($event)" />
+
+      <div class="cc-shade"></div>
+
+      <div class="cc-prem" *ngIf="isPremium">PREMIUM</div>
+
+      <div class="cc-types">
+        <span class="cc-t cc-t-short" *ngIf="item && item.type === 'short_drama'">SHORTS</span>
+        <span class="cc-t cc-t-serial" *ngIf="item && item.type === 'series'">SERIAL</span>
+        <span class="cc-t cc-t-anime" *ngIf="item && item.type === 'anime_series'">ANIME</span>
+      </div>
+
+      <div class="cc-play">
+        <span [class.lk]="locked">{{ locked ? '\uD83D\uDD12' : '\u25B6' }}</span>
+      </div>
+
+      <div class="cc-foot">
         <h4 class="cc-title">{{ title }}</h4>
-        <div class="cc-sub">
-          <span *ngIf="year">{{ year }}</span>
-          <span class="cc-dot" *ngIf="year && typeLabel">&#8226;</span>
-          <span class="cc-type" *ngIf="typeLabel">{{ typeLabel }}</span>
+        <div class="cc-row">
+          <span>{{ year }}</span>
+          <span class="cc-price" *ngIf="price > 0">{{ priceLabel }}</span>
+          <span class="cc-free" *ngIf="price <= 0">Bepul</span>
         </div>
       </div>
     </div>
@@ -35,80 +40,75 @@ import { Component, Input } from '@angular/core';
   styles: [`
     :host { display: block; }
     .cc {
-      width: 132px; flex-shrink: 0; cursor: pointer;
-      transition: transform 0.25s ease;
+      position: relative; width: 132px; flex-shrink: 0; cursor: pointer;
+      aspect-ratio: 2 / 3; border-radius: 12px; overflow: hidden;
+      background: #09090b; border: 1px solid rgba(39,39,42,0.8);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease, border-color 0.3s ease;
     }
-    .cc:active { transform: scale(0.96); }
+    @media (min-width: 640px) { .cc { width: 144px; } }
+    @media (min-width: 768px) { .cc { width: 176px; } }
+    .cc:hover { transform: scale(1.03); border-color: #3f3f46; }
+    .cc:active { transform: scale(0.97); }
     .cc-grid { width: 100%; }
-    .cc-poster {
-      position: relative; width: 100%; aspect-ratio: 2 / 3;
-      border-radius: 14px; overflow: hidden;
-      background: #18181b; border: 1px solid rgba(63,63,70,0.55);
-      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    .cc-ph {
+      position: absolute; inset: 0; background: #18181b;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
-    .cc-poster img {
-      width: 100%; height: 100%; object-fit: cover; display: block;
-      transition: transform 0.35s ease;
+    .cc-phi { width: 32px; height: 32px; border-radius: 8px; background: #27272a; color: #ef4444; opacity: 0.5; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .cc-pht { font-size: 9px; font-weight: 700; color: #71717a; margin-top: 4px; letter-spacing: 0.08em; opacity: 0.7; }
+    .cc-img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; object-position: center; opacity: 0;
+      transition: opacity 0.5s ease, transform 0.5s ease;
     }
-    .cc:hover .cc-poster img { transform: scale(1.06); }
+    .cc-img.on { opacity: 1; }
+    .cc:hover .cc-img { transform: scale(1.05); }
     .cc-shade {
-      position: absolute; inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.05) 55%, transparent 100%);
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.9;
+      background: linear-gradient(to top, #000 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
     }
-    .cc-badges {
-      position: absolute; top: 6px; left: 6px;
-      display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+    .cc-prem {
+      position: absolute; top: 8px; right: 8px; z-index: 2;
+      background: linear-gradient(90deg, #f59e0b, #d97706); color: #09090b;
+      font-size: 9px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase;
+      padding: 2px 6px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     }
-    .cc-badge {
-      font-size: 9px; font-weight: 900; letter-spacing: 0.04em;
-      padding: 2px 6px; border-radius: 6px; color: #fff;
-      backdrop-filter: blur(6px); text-transform: uppercase;
-    }
-    .cc-b-new { background: linear-gradient(90deg, #10b981, #16a34a); }
-    .cc-b-vip { background: linear-gradient(90deg, #f59e0b, #d97706); color: #1c1917; }
-    .cc-b-free { background: rgba(9,9,11,0.7); color: #34d399; border: 1px solid rgba(52,211,153,0.4); }
-    .cc-rating {
-      position: absolute; top: 6px; right: 6px;
-      font-size: 10px; font-weight: 800; color: #fbbf24;
-      background: rgba(9,9,11,0.72); border-radius: 6px;
-      padding: 2px 6px; backdrop-filter: blur(6px);
-    }
+    .cc-types { position: absolute; top: 8px; left: 8px; z-index: 2; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+    .cc-t { color: #fff; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .cc-t-short { background: rgba(220,38,38,0.9); }
+    .cc-t-serial { background: rgba(147,51,234,0.9); }
+    .cc-t-anime { background: rgba(37,99,235,0.9); }
     .cc-play {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; transition: opacity 0.2s;
-    }
-    .cc-play span {
-      width: 38px; height: 38px; border-radius: 50%;
-      background: rgba(220,38,38,0.92); color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; padding-left: 3px;
-      box-shadow: 0 6px 18px rgba(220,38,38,0.5);
+      position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.25s;
     }
     .cc:hover .cc-play { opacity: 1; }
-    .cc-eps {
-      position: absolute; bottom: 6px; right: 6px;
-      font-size: 9px; font-weight: 800; color: #e4e4e7;
-      background: rgba(9,9,11,0.75); padding: 2px 6px; border-radius: 6px;
+    .cc-play span {
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(220,38,38,0.92); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 16px; padding-left: 3px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5); transform: scale(0.9); transition: transform 0.25s;
     }
-    .cc-meta { padding: 7px 2px 0; }
+    .cc-play span.lk { padding-left: 0; }
+    .cc:hover .cc-play span { transform: scale(1); }
+    .cc-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 8px 10px; display: flex; flex-direction: column; justify-content: flex-end; }
     .cc-title {
-      margin: 0; font-size: 12.5px; font-weight: 700; color: #fff;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      line-height: 1.25;
+      margin: 0 0 6px; font-size: 12px; font-weight: 700; color: #fff; line-height: 1.2;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8); transition: color 0.2s;
     }
-    .cc-sub {
-      display: flex; align-items: center; gap: 4px;
-      margin-top: 2px; font-size: 10px; color: #a1a1aa;
-    }
-    .cc-dot { color: #52525b; }
-    .cc-type { color: #f87171; font-weight: 800; text-transform: uppercase; }
+    .cc:hover .cc-title { color: #f87171; }
+    .cc-row { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: #d4d4d8; font-weight: 500; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .cc-price { color: #f87171; font-weight: 700; }
+    .cc-free { color: #34d399; font-weight: 700; }
   `],
 })
 export class ContentCardComponent {
   @Input() item: any = null;
   @Input() hasAccess = false;
   @Input() variant: 'row' | 'grid' = 'row';
+
+  loaded = false;
 
   private readonly fallback =
     'data:image/svg+xml;utf8,' +
@@ -127,9 +127,12 @@ export class ContentCardComponent {
     return this.item.posterUrl || this.item.poster || this.item.thumbnailUrl || this.fallback;
   }
 
-  get rating(): string {
-    if (!this.item || !this.item.rating) { return ''; }
-    return Number(this.item.rating).toFixed(1);
+  get price(): number {
+    return this.item && this.item.price ? Number(this.item.price) : 0;
+  }
+
+  get priceLabel(): string {
+    return this.price.toLocaleString() + ' so\'m';
   }
 
   get isPremium(): boolean {
@@ -140,33 +143,9 @@ export class ContentCardComponent {
     return this.isPremium && !this.hasAccess;
   }
 
-  get isNew(): boolean {
-    if (!this.item || !this.item.createdAt) { return false; }
-    const created = new Date(this.item.createdAt).getTime();
-    if (!created) { return false; }
-    return Date.now() - created < 30 * 24 * 60 * 60 * 1000;
-  }
-
-  get episodesLabel(): string {
-    if (!this.item) { return ''; }
-    const count = this.item.episodeCount || (this.item.episodes ? this.item.episodes.length : 0);
-    if (!count) { return ''; }
-    return count + ' qism';
-  }
-
-  get typeLabel(): string {
-    if (!this.item || !this.item.type) { return ''; }
-    const map: Record<string, string> = {
-      movie: 'Kino',
-      series: 'Serial',
-      short_drama: 'Mini drama',
-      anime_series: 'Anime',
-    };
-    return map[this.item.type] || this.item.type;
-  }
-
   onImgError(event: Event): void {
     const img = event.target as HTMLImageElement;
     if (img && img.src !== this.fallback) { img.src = this.fallback; }
+    this.loaded = true;
   }
 }
