@@ -37,6 +37,8 @@ import { SplashScreenComponent } from './shared/components/splash-screen/splash-
     <ng-container *ngIf="!isMiniApp">
       <router-outlet></router-outlet>
     </ng-container>
+
+    <app-dialog-host></app-dialog-host>
   `,
   styles: [`
     .app-shell {
