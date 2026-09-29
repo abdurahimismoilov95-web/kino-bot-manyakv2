@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, Routes } from '@angular/router';
 import { AdminComponent } from './admin.component';
 import { AdminDashboardComponent } from './components/dashboard.component';
+import { AdminStatsComponent } from './components/stats.component';
 import { AdminUsersComponent } from './components/users.component';
 import { AdminContentComponent } from './components/content.component';
 import { AdminPaymentsComponent } from './components/payments.component';
@@ -40,6 +41,7 @@ const routes: Routes = [
   declarations: [
     AdminComponent,
     AdminDashboardComponent,
+    AdminStatsComponent,
     AdminUsersComponent,
     AdminContentComponent,
     AdminPaymentsComponent,
