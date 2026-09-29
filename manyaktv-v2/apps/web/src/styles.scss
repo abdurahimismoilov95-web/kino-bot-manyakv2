@@ -33,17 +33,33 @@ video {
   --accent: #e50914;
 }
 
-html,
+/* Sahifa scroll: faqat html (viewport) aylanadi, body oddiy blok */
+html {
+  margin: 0;
+  padding: 0;
+  height: auto;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--color-bg);
+}
 body {
   margin: 0;
   padding: 0;
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: visible;
+  position: static;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  overscroll-behavior: none;
-  overflow-x: hidden;
+}
+app-root {
+  display: block;
   min-height: 100dvh;
 }
 
