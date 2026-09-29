@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import Hls from 'hls.js';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { environment } from '../../../environments/environment';
 
 /**
  * Shorts (mini dramalar) lentasi.
@@ -15,35 +16,31 @@ import { AuthService } from '../../core/services/auth.service';
   selector: 'app-shorts',
   template: `
     <div class="shorts-root">
-      <!-- Yuklanmoqda -->
       <div class="center-box" *ngIf="loading">
         <div class="spinner"></div>
         <p class="muted">Yuklanmoqda...</p>
       </div>
 
-      <!-- Bosh qism -->
       <div class="center-box" *ngIf="!loading && dramas.length === 0">
         <p class="empty-glyph">&#9634;</p>
         <p class="muted">Hozircha vertikal mini dramalar mavjud emas.</p>
         <button class="btn btn-ghost" (click)="goHome()">Bosh sahifaga qaytish</button>
       </div>
 
-      <!-- Lenta -->
       <div class="stage" *ngIf="!loading && currentDrama">
-        <!-- Video -->
         <video
           #video
           class="video"
           playsinline
           webkit-playsinline
           [muted]="isMuted"
-          [poster]="currentDrama.posterUrl || ''"
+          [poster]="abs(currentDrama.posterUrl)"
           (click)="togglePlay()"
           (loadeddata)="onVideoReady()"
           (timeupdate)="onTimeUpdate()"
+          (error)="onVideoError()"
           (ended)="nextEpisode()"></video>
 
-        <!-- Qulf -->
         <div class="lock-overlay" *ngIf="isLocked">
           <p class="lock-glyph">&#128274;</p>
           <p class="lock-title">Bu qism qulflangan</p>
@@ -51,12 +48,10 @@ import { AuthService } from '../../core/services/auth.service';
           <button class="btn btn-red" (click)="goPlans()">VIP olish</button>
         </div>
 
-        <!-- Play belgisi -->
         <div class="play-badge" *ngIf="!isPlaying && !isLocked" (click)="togglePlay()">
           <span>&#9654;</span>
         </div>
 
-        <!-- Yuqori panel -->
         <div class="top-bar">
           <button class="circle-btn" (click)="goHome()">&#8592;</button>
           <span class="top-title">Shorts</span>
@@ -69,7 +64,6 @@ import { AuthService } from '../../core/services/auth.service';
           Ovozni yoqish uchun bosing
         </p>
 
-        <!-- Ong tomondagi amallar -->
         <div class="side-actions">
           <button class="side-btn" (click)="toggleLike()">
             <span class="side-glyph" [class.liked]="isLiked">
@@ -89,7 +83,6 @@ import { AuthService } from '../../core/services/auth.service';
           </button>
         </div>
 
-        <!-- Pastdagi malumot -->
         <div class="info-bar">
           <p class="drama-title">{{ currentDrama.title }}</p>
           <p class="episode-line" *ngIf="currentEpisode">
@@ -100,21 +93,21 @@ import { AuthService } from '../../core/services/auth.service';
           </p>
         </div>
 
-        <!-- Progress -->
         <div class="progress-track">
           <div class="progress-fill" [style.width.%]="progressPercent"></div>
         </div>
 
-        <!-- Yuqori/pastga surish -->
         <div class="arrows">
           <button class="arrow-btn" (click)="prevEpisode()" [disabled]="!hasPrev">&#9650;</button>
           <button class="arrow-btn" (click)="nextEpisode()" [disabled]="!hasNext">&#9660;</button>
         </div>
 
-        <p class="error-text" *ngIf="errorText">{{ errorText }}</p>
+        <div class="error-box" *ngIf="errorText">
+          <p class="error-text">{{ errorText }}</p>
+          <button class="btn btn-red" (click)="retry()">Qayta urinish</button>
+        </div>
       </div>
 
-      <!-- Qismlar paneli -->
       <div class="sheet-backdrop" *ngIf="showEpisodes" (click)="showEpisodes = false">
         <div class="sheet" (click)="$event.stopPropagation()">
           <div class="sheet-head">
@@ -135,14 +128,13 @@ import { AuthService } from '../../core/services/auth.service';
         </div>
       </div>
 
-      <!-- Boshqa dramalar -->
       <div class="drama-strip" *ngIf="!loading && dramas.length > 1">
         <button
           *ngFor="let d of dramas; let i = index"
           class="strip-item"
           [class.strip-active]="i === dramaIndex"
           (click)="selectDrama(i)">
-          <img [src]="d.posterUrl || ''" [alt]="d.title" />
+          <img [src]="abs(d.posterUrl)" [alt]="d.title" />
         </button>
       </div>
     </div>
@@ -155,8 +147,6 @@ import { AuthService } from '../../core/services/auth.service';
       color: #fff;
       overflow: hidden;
     }
-
-    /* Bosh holatlar */
     .center-box {
       min-height: 70dvh;
       display: flex;
@@ -177,8 +167,6 @@ import { AuthService } from '../../core/services/auth.service';
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Sahna */
     .stage {
       position: relative;
       width: 100%;
@@ -192,8 +180,6 @@ import { AuthService } from '../../core/services/auth.service';
       background: #000;
       display: block;
     }
-
-    /* Qulf */
     .lock-overlay {
       position: absolute; inset: 0;
       background: rgba(0,0,0,0.82);
@@ -205,8 +191,6 @@ import { AuthService } from '../../core/services/auth.service';
     .lock-glyph { font-size: 2.4rem; margin: 0; }
     .lock-title { font-size: 1.05rem; font-weight: 800; margin: 0; }
     .lock-sub { font-size: 0.8rem; color: #a1a1aa; margin: 0 0 10px; }
-
-    /* Play */
     .play-badge {
       position: absolute;
       top: 50%; left: 50%;
@@ -219,8 +203,6 @@ import { AuthService } from '../../core/services/auth.service';
       z-index: 20;
       cursor: pointer;
     }
-
-    /* Yuqori panel */
     .top-bar {
       position: absolute;
       top: calc(10px + env(safe-area-inset-top, 0px));
@@ -253,8 +235,6 @@ import { AuthService } from '../../core/services/auth.service';
       cursor: pointer;
       margin: 0;
     }
-
-    /* Ong panel */
     .side-actions {
       position: absolute;
       right: 10px;
@@ -270,8 +250,6 @@ import { AuthService } from '../../core/services/auth.service';
     .side-glyph { font-size: 1.5rem; line-height: 1; }
     .side-glyph.liked { color: #ef4444; }
     .side-label { font-size: 0.65rem; color: #d4d4d8; }
-
-    /* Pastdagi malumot */
     .info-bar {
       position: absolute;
       left: 14px; right: 74px;
@@ -299,7 +277,6 @@ import { AuthService } from '../../core/services/auth.service';
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-
     .progress-track {
       position: absolute;
       left: 0; right: 0; bottom: 96px;
@@ -308,7 +285,6 @@ import { AuthService } from '../../core/services/auth.service';
       z-index: 25;
     }
     .progress-fill { height: 100%; background: #dc2626; }
-
     .arrows {
       position: absolute;
       right: 10px;
@@ -326,17 +302,22 @@ import { AuthService } from '../../core/services/auth.service';
       cursor: pointer;
     }
     .arrow-btn:disabled { opacity: 0.3; }
-
-    .error-text {
+    .error-box {
       position: absolute;
-      left: 16px; right: 16px; bottom: 150px;
+      left: 16px; right: 16px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      z-index: 28;
+      background: rgba(0,0,0,0.7);
+      padding: 16px;
+      border-radius: 14px;
+    }
+    .error-text {
       text-align: center;
       color: #fca5a5;
-      font-size: 0.78rem;
-      z-index: 26;
+      font-size: 0.82rem;
+      margin: 0;
     }
-
-    /* Qismlar paneli */
     .sheet-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.7);
@@ -376,8 +357,6 @@ import { AuthService } from '../../core/services/auth.service';
     .ep-active { background: #dc2626; border-color: #dc2626; color: #fff; }
     .ep-locked { opacity: 0.55; }
     .ep-lock { position: absolute; top: 2px; right: 4px; font-size: 0.6rem; }
-
-    /* Dramalar tasmasi */
     .drama-strip {
       position: absolute;
       left: 0; right: 0;
@@ -401,8 +380,6 @@ import { AuthService } from '../../core/services/auth.service';
     }
     .strip-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .strip-active { border-color: #dc2626; }
-
-    /* Tugmalar */
     .btn {
       border: none;
       border-radius: 12px;
@@ -460,7 +437,14 @@ export class ShortsComponent implements OnInit, OnDestroy {
     this.destroyHls();
   }
 
-  // ── Holat getterlari ────────────────────────────────────────
+  /** Nisbiy fayl manzillarini API origin bilan toldirish */
+  abs(u: string): string {
+    if (!u) { return ''; }
+    if (/^https?:\/\//i.test(u)) { return u; }
+    const origin = String(environment.apiUrl || '').replace(/\/api\/v1\/?$/, '');
+    return origin + (u.charAt(0) === '/' ? u : '/' + u);
+  }
+
   get currentDrama(): any {
     return this.dramas[this.dramaIndex] || null;
   }
@@ -512,12 +496,13 @@ export class ShortsComponent implements OnInit, OnDestroy {
     if (!ep) { return false; }
     if (ep.isFree) { return true; }
     if (this.auth.isVip) { return true; }
+    const d = this.currentDrama;
+    if (d && !d.isPremium && !d.price) { return true; }
     const num = ep.episodeNumber || 0;
-    const freeLimit = this.currentDrama?.freeEpisodeCount || 0;
+    const freeLimit = d?.freeEpisodeCount || 0;
     return num > 0 && num <= freeLimit;
   }
 
-  // ── Navigatsiya ─────────────────────────────────────────────
   selectDrama(i: number): void {
     if (i === this.dramaIndex) { return; }
     this.saveProgress();
@@ -552,6 +537,10 @@ export class ShortsComponent implements OnInit, OnDestroy {
     }
   }
 
+  retry(): void {
+    this.startPlayback();
+  }
+
   private loadDrama(index: number, lastEpisode = false): void {
     this.dramaIndex = index;
     this.episodeIndex = 0;
@@ -561,14 +550,19 @@ export class ShortsComponent implements OnInit, OnDestroy {
     const drama = this.currentDrama;
     this.isFav = !!drama?.isFavorite;
 
-    // Qismlar royxati toliq kelmagan bolsa alohida yuklaymiz
     if (drama && (!drama.episodes || drama.episodes.length === 0)) {
       this.api.getContentById(drama.id).subscribe({
-        next: (full: any) => {
+        next: (r: any) => {
+          const full = r && r.data ? r.data : r;
+          const eps: any[] = ((full && full.episodes) || []).slice().sort((a: any, b: any) => {
+            const s = (a.seasonNumber || 1) - (b.seasonNumber || 1);
+            return s !== 0 ? s : (a.episodeNumber || 0) - (b.episodeNumber || 0);
+          });
+          full.episodes = eps;
           this.dramas[index] = full;
           this.isFav = !!full?.isFavorite;
           if (lastEpisode) {
-            this.episodeIndex = Math.max((full?.episodes?.length || 1) - 1, 0);
+            this.episodeIndex = Math.max(eps.length - 1, 0);
           }
           this.startPlayback();
         },
@@ -583,7 +577,19 @@ export class ShortsComponent implements OnInit, OnDestroy {
     this.startPlayback();
   }
 
-  // ── Video ───────────────────────────────────────────────────
+  private whenVideo(cb: (el: HTMLVideoElement) => void, tries = 0): void {
+    const el = this.videoRef?.nativeElement;
+    if (el) { cb(el); return; }
+    if (tries > 20) { this.errorText = 'Pleyer ochilmadi.'; return; }
+    setTimeout(() => this.whenVideo(cb, tries + 1), 50);
+  }
+
+  private directUrl(): string {
+    const ep = this.currentEpisode;
+    const d = this.currentDrama;
+    return this.abs((ep && ep.videoUrl) || (d && d.videoUrl) || '');
+  }
+
   private startPlayback(): void {
     this.errorText = '';
     this.progressPercent = 0;
@@ -591,48 +597,83 @@ export class ShortsComponent implements OnInit, OnDestroy {
 
     const drama = this.currentDrama;
     const ep = this.currentEpisode;
-    if (!drama || !ep) { return; }
+    if (!drama) { return; }
+
+    // Qismlari yoq drama - bitta video
+    if (!ep) {
+      const direct = this.directUrl();
+      if (direct) { this.playDirect(direct); }
+      else { this.errorText = 'Bu drama uchun video yuklanmagan.'; }
+      return;
+    }
 
     if (!this.canWatch(ep)) {
       this.isPlaying = false;
       return;
     }
 
+    const direct = this.directUrl();
+    const hlsReady = !!ep.hlsPath;
+    if (direct && !hlsReady) { this.playDirect(direct); return; }
+
     this.api.getEpisodeStreamUrl(drama.id, ep.id).subscribe({
-      next: (res: any) => this.attachStream(res?.masterPlaylist || ''),
-      error: () => { this.errorText = 'Video manzilini olib bolmadi.'; },
+      next: (res: any) => {
+        const url = res?.masterPlaylist || '';
+        if (url) { this.attachStream(url, direct); }
+        else if (direct) { this.playDirect(direct); }
+        else { this.errorText = 'Video manzili topilmadi.'; }
+      },
+      error: () => {
+        if (direct) { this.playDirect(direct); }
+        else { this.errorText = 'Video manzilini olib bolmadi.'; }
+      },
     });
   }
 
-  private attachStream(url: string): void {
-    const el = this.videoRef?.nativeElement;
-    if (!el || !url) { return; }
-
-    if (Hls.isSupported() && url.indexOf('.m3u8') !== -1) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
-      hls.loadSource(url);
-      hls.attachMedia(el);
-      hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
-        if (data?.fatal) {
-          this.errorText = 'Videoni yuklashda xatolik.';
-          this.destroyHls();
-        }
-      });
-      this.hls = hls;
-    } else {
+  private playDirect(url: string): void {
+    this.destroyHls();
+    this.whenVideo((el) => {
       el.src = url;
-    }
+      el.load();
+    });
+  }
+
+  private attachStream(url: string, fallback: string): void {
+    this.whenVideo((el) => {
+      if (Hls.isSupported() && url.indexOf('.m3u8') !== -1) {
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+        hls.loadSource(url);
+        hls.attachMedia(el);
+        hls.on(Hls.Events.ERROR, (_e: any, data: any) => {
+          if (data?.fatal) {
+            this.destroyHls();
+            if (fallback) { this.playDirect(fallback); }
+            else { this.errorText = 'Videoni yuklashda xatolik.'; }
+          }
+        });
+        this.hls = hls;
+      } else {
+        el.src = url;
+      }
+    });
+  }
+
+  onVideoError(): void {
+    const el = this.videoRef?.nativeElement;
+    if (!el || this.hls) { return; }
+    if (!el.getAttribute('src')) { return; }
+    this.errorText = 'Video fayl ochilmadi. Qayta urinib koring.';
   }
 
   onVideoReady(): void {
     const el = this.videoRef?.nativeElement;
     if (!el) { return; }
+    this.errorText = '';
     el.muted = this.isMuted;
     el.play().then(() => {
       this.isPlaying = true;
       this.startSaveTimer();
     }).catch(() => {
-      // Brauzer ovozli avtoijroni bloklaydi - ovozsiz urinib koramiz
       this.isMuted = true;
       el.muted = true;
       el.play().then(() => {
@@ -665,7 +706,6 @@ export class ShortsComponent implements OnInit, OnDestroy {
     this.progressPercent = Math.min(100, (el.currentTime / el.duration) * 100);
   }
 
-  // ── Amallar ─────────────────────────────────────────────────
   toggleLike(): void {
     const key = this.likeKey();
     this.likes[key] = !this.likes[key];
@@ -688,7 +728,6 @@ export class ShortsComponent implements OnInit, OnDestroy {
     this.router.navigate(['/']);
   }
 
-  // ── Yordamchilar ────────────────────────────────────────────
   private likeKey(): string {
     return (this.currentDrama?.id || '') + ':' + (this.currentEpisode?.id || '');
   }
