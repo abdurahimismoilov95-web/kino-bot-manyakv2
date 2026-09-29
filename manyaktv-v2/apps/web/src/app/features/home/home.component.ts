@@ -124,13 +124,11 @@ import { StorageService } from '../../core/services/storage.service';
       </section>
     </div>
 
-    <app-daily-checkin [isVip]="isVip" (openVip)="openPlans()"></app-daily-checkin>
-
     <app-store-showcase
       [items]="storeItems"
       [hasAccess]="isVip"
       (select)="openWatch($event)"
-      (buy)="openPlans()">
+      (buy)="buyItem($event)">
     </app-store-showcase>
   `,
   styles: [`
@@ -388,6 +386,18 @@ export class HomeComponent implements OnInit {
   }
 
   openPlans(): void { this.router.navigate(['/subscription']); }
+
+  /** Vitrinadan alohida kino sotib olish: chek sahifasi */
+  buyItem(item: any): void {
+    if (!item || !item.id) { this.openPlans(); return; }
+    this.router.navigate(['/subscription'], {
+      queryParams: {
+        contentId: item.id,
+        title: item.title || '',
+        price: Number(item.price || 15000),
+      },
+    });
+  }
 
   goShorts(): void { this.router.navigate(['/shorts']); }
 
