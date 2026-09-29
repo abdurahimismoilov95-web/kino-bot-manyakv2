@@ -18,10 +18,20 @@ import { SplashScreenComponent } from './shared/components/splash-screen/splash-
         (done)="onSplashDone()"
       ></app-splash-screen>
 
-      <div class="app-shell" *ngIf="!showSplash">
-        <router-outlet></router-outlet>
-        <app-bottom-nav></app-bottom-nav>
-      </div>
+      <ng-container *ngIf="!showSplash">
+        <div class="gate" *ngIf="needsVerify">
+          <app-telegram-verify
+            [open]="true"
+            [dismissible]="false"
+            (verified)="onGateVerified()"
+          ></app-telegram-verify>
+        </div>
+
+        <div class="app-shell" *ngIf="!needsVerify">
+          <router-outlet></router-outlet>
+          <app-bottom-nav></app-bottom-nav>
+        </div>
+      </ng-container>
     </ng-container>
 
     <ng-container *ngIf="!isMiniApp">
@@ -35,6 +45,7 @@ import { SplashScreenComponent } from './shared/components/splash-screen/splash-
       background: #0f0f0f;
       color: #fff;
     }
+    .gate { min-height: 100dvh; background: #09090b; }
   `],
 })
 export class AppComponent implements OnInit, OnDestroy {
@@ -51,6 +62,12 @@ export class AppComponent implements OnInit, OnDestroy {
     private readonly cdr: ChangeDetectorRef,
     private readonly screenGuard: ScreenProtectionService,
   ) {}
+
+  /** Kontakt bilan tasdiqlanmaguncha ilova ichiga kirish yopiq */
+  get needsVerify(): boolean {
+    const u = this.auth.currentUser;
+    return !u || !u.isPhoneVerified;
+  }
 
   async ngOnInit(): Promise<void> {
     this.isMiniApp = this.platform.isTelegramMiniApp();
@@ -82,7 +99,6 @@ export class AppComponent implements OnInit, OnDestroy {
     } catch (err) {
       console.error('Auth failed:', err);
     } finally {
-      // Guard shu signalni kutib turadi
       this.auth.markReady();
     }
 
@@ -91,7 +107,6 @@ export class AppComponent implements OnInit, OnDestroy {
       else { this.onSplashDone(); }
     }, 1200);
 
-    // Splash uzilib qolsa ham ilova ochilsin
     setTimeout(() => {
       if (this.showSplash) { this.onSplashDone(); }
     }, 3500);
@@ -108,11 +123,18 @@ export class AppComponent implements OnInit, OnDestroy {
     this.ensureRouteActivated();
   }
 
-  /**
-   * Ishga tushishda navigatsiya bekor bolgan bolsa (token hali yoq edi),
-   * outlet paydo bolgach yonalishni qayta ishga tushiramiz.
-   * Busiz sahifa qop-qora qolib ketadi.
-   */
+  /** Kontakt tasdiqlandi: foydalanuvchini yangilab, ilovani ochamiz */
+  async onGateVerified(): Promise<void> {
+    await this.auth.refreshUser();
+    const u = this.auth.currentUser;
+    if (u && !u.isPhoneVerified) {
+      // server yangi holatni qaytarmagan bolsa ham, tasdiqlash o'tgan
+      (u as any).isPhoneVerified = true;
+    }
+    this.cdr.detectChanges();
+    this.ensureRouteActivated();
+  }
+
   private ensureRouteActivated(): void {
     const url = this.router.url && this.router.url !== '/' ? this.router.url : '/';
     setTimeout(() => {

@@ -30,13 +30,6 @@ export type TelegramContact = {
 /** Kod 10 daqiqa yashaydi */
 const TTL_MS = 10 * 60 * 1000;
 
-/**
- * manyak-tv1 dagi "Kontakt yuborish orqali tasdiqlash" oqimi:
- *  1) Sayt  POST /verify/start        -> { code, deepLink }
- *  2) User  botga /start v_<code>     -> bot kontakt soraydi
- *  3) User  kontaktini yuboradi       -> contact.user_id === from.id tekshiriladi
- *  4) Sayt  GET /verify/status?code=  -> { verified, token, user }
- */
 @Injectable()
 export class VerifyService {
   private readonly logger = new Logger(VerifyService.name);
@@ -73,7 +66,6 @@ export class VerifyService {
     return out;
   }
 
-  /** Sayt yangi tasdiqlash sessiyasini boshlaydi */
   start(): { code: string; deepLink: string; expiresIn: number } {
     this.sweep();
     const code = this.newCode();
@@ -90,22 +82,21 @@ export class VerifyService {
     return this.sessions.has(code);
   }
 
-  /** Sayt holatni sorab turadi */
   async status(code: string): Promise<{
     verified: boolean;
     expired?: boolean;
+    status?: string;
     token?: string;
     user?: Partial<User>;
   }> {
     this.sweep();
     const session = this.sessions.get(code);
-    if (!session) return { verified: false, expired: true };
+    if (!session) return { verified: false, expired: true, status: 'expired' };
     if (!session.verified || !session.userId) return { verified: false };
 
     const user = await this.userRepo.findOne({ where: { id: session.userId } });
     if (!user) return { verified: false };
 
-    // Token bir marta beriladi, keyin sessiya yopiladi
     const token = session.token;
     this.sessions.delete(code);
 
@@ -133,10 +124,6 @@ export class VerifyService {
     return UserRole.USER;
   }
 
-  /**
-   * Bot kontaktni qabul qilganda chaqiriladi.
-   * contact.user_id === from.id bolishi shart (boshqaning kontaktini yubora olmaydi).
-   */
   async completeByContact(
     code: string,
     from: TelegramFrom,
@@ -152,6 +139,9 @@ export class VerifyService {
     }
 
     const telegramId = String(from.id);
+    const phone = contact.phone_number
+      ? String(contact.phone_number).slice(0, 20)
+      : null;
     let user = await this.userRepo.findOne({ where: { telegramId } });
 
     if (!user) {
@@ -164,15 +154,17 @@ export class VerifyService {
         role: this.resolveRole(telegramId),
         lastSeenAt: new Date(),
       });
-      user = await this.userRepo.save(user);
     } else {
       if (user.isBanned) return { ok: false, reason: 'banned' };
       user.firstName = from.first_name || user.firstName;
       user.lastName = from.last_name ?? user.lastName;
       user.username = from.username ?? user.username;
       user.lastSeenAt = new Date();
-      user = await this.userRepo.save(user);
     }
+
+    (user as any).isPhoneVerified = true;
+    if (phone) (user as any).phoneNumber = phone;
+    user = await this.userRepo.save(user);
 
     session.verified = true;
     session.userId = user.id;

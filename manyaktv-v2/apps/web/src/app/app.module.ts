@@ -10,6 +10,7 @@ import { AuthInterceptor } from './core/interceptors/auth.interceptor';
 import { GlobalErrorHandler } from './core/services/global-error-handler';
 import { BottomNavComponent } from './shared/components/bottom-nav/bottom-nav.component';
 import { SplashScreenComponent } from './shared/components/splash-screen/splash-screen.component';
+import { SharedModule } from './shared/shared.module';
 
 @NgModule({
   declarations: [AppComponent, BottomNavComponent, SplashScreenComponent],
@@ -17,6 +18,7 @@ import { SplashScreenComponent } from './shared/components/splash-screen/splash-
     BrowserModule,
     BrowserAnimationsModule,
     HttpClientModule,
+    SharedModule,
     RouterModule.forRoot(APP_ROUTES, {
       scrollPositionRestoration: 'enabled',
     }),
