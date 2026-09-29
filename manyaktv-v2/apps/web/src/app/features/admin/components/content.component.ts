@@ -4,7 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AdminApiService } from './admin-api.service';
 import { environment } from '../../../../environments/environment';
 
-interface UploadState { progress: number; status: string; }
+interface UploadState { progress: number; status: string; name: string; }
 
 @Component({
   selector: 'app-admin-content',
@@ -57,24 +57,16 @@ interface UploadState { progress: number; status: string; }
         <button class="x" (click)="closeEditor()">&#10005;</button>
         <h3 class="mh">{{ editing.id ? 'Kontentni Tahrirlash' : 'Yangi Kontent' }}</h3>
 
-        <div class="row2">
-          <div>
-            <label class="lb">Nomi</label>
-            <input class="in" [(ngModel)]="editing.title" />
-          </div>
-          <div>
-            <label class="lb">Turi</label>
-            <select class="in" [(ngModel)]="editing.type">
-              <option value="movie">Kino</option>
-              <option value="series">Serial</option>
-              <option value="anime_series">Anime</option>
-              <option value="short_drama">Mini Drama (9:16)</option>
-            </select>
-          </div>
-        </div>
+        <label class="lb">Nomi</label>
+        <input class="in" [(ngModel)]="editing.title" />
 
-        <label class="lb">Asl nomi</label>
-        <input class="in" [(ngModel)]="editing.originalTitle" />
+        <label class="lb">Turi</label>
+        <select class="in" [(ngModel)]="editing.type">
+          <option value="movie">Kino</option>
+          <option value="series">Serial</option>
+          <option value="anime_series">Anime</option>
+          <option value="short_drama">Mini Drama (9:16)</option>
+        </select>
 
         <label class="lb">Ekrandagi katalog (bo'lim)</label>
         <select class="in" [(ngModel)]="editing.catalogId" (ngModelChange)="onCatalog($event)">
@@ -82,50 +74,40 @@ interface UploadState { progress: number; status: string; }
           <option *ngFor="let k of catalogs" [value]="k.id">{{ k.title || k.name }}</option>
         </select>
 
-        <div class="row2 mt">
-          <div class="box">
-            <label class="lb">Poster (rasm)</label>
-            <img *ngIf="editing.posterUrl" class="prev" [src]="abs(editing.posterUrl)" />
-            <label class="drop">
-              <span *ngIf="!up['poster']">{{ editing.posterUrl ? 'Tayyor! (boshqa tanlash)' : 'Rasm tanlang' }}</span>
-              <span *ngIf="up['poster']">{{ up['poster'].status === 'ok' ? 'Yuklandi' : ('Yuklanmoqda... ' + up['poster'].progress + '%') }}</span>
-              <input type="file" accept="image/*" (change)="onFile($event, 'poster')" hidden />
-            </label>
-            <input class="in" [(ngModel)]="editing.posterUrl" placeholder="yoki rasm URL" />
-          </div>
+        <label class="lb">Poster</label>
+        <div class="box">
+          <img *ngIf="editing.posterUrl" class="prev" [src]="abs(editing.posterUrl)" />
+          <label class="drop">
+            <span *ngIf="!up['poster']">{{ editing.posterUrl ? 'Poster tayyor - boshqasini tanlash' : 'Rasm tanlash (galereya)' }}</span>
+            <span *ngIf="up['poster']">{{ up['poster'].status === 'ok' ? ('Yuklandi: ' + up['poster'].name) : ('Yuklanmoqda... ' + up['poster'].progress + '%') }}</span>
+            <input type="file" accept="image/*" (change)="onFile($event, 'poster')" hidden />
+          </label>
+          <div class="bar" *ngIf="up['poster'] && up['poster'].status === 'loading'"><div class="fill" [style.width.%]="up['poster'].progress"></div></div>
+        </div>
 
-          <div class="box" *ngIf="editing.type === 'movie'">
-            <label class="lb">Video fayl (kino)</label>
+        <ng-container *ngIf="editing.type === 'movie'">
+          <label class="lb">Video fayl (kino)</label>
+          <div class="box">
             <label class="drop">
-              <span *ngIf="!up['video']">{{ editing.videoUrl ? 'Video tayyor! (boshqa tanlash)' : 'Videoni tanlang' }}</span>
-              <span *ngIf="up['video']">{{ up['video'].status === 'ok' ? 'Video yuklandi' : ('Video yuklanmoqda... ' + up['video'].progress + '%') }}</span>
+              <span *ngIf="!up['video']">{{ editing.videoUrl ? 'Video tayyor - boshqasini tanlash' : 'Video tanlash (galereya)' }}</span>
+              <span *ngIf="up['video']">{{ up['video'].status === 'ok' ? ('Yuklandi: ' + up['video'].name) : ('Video yuklanmoqda... ' + up['video'].progress + '%') }}</span>
               <input type="file" accept="video/*" (change)="onFile($event, 'video')" hidden />
             </label>
-            <div class="bar" *ngIf="up['video']"><div class="fill" [style.width.%]="up['video'].progress"></div></div>
-            <input class="in" [(ngModel)]="editing.videoUrl" placeholder="yoki video URL" />
+            <div class="bar" *ngIf="up['video'] && up['video'].status === 'loading'"><div class="fill" [style.width.%]="up['video'].progress"></div></div>
           </div>
-        </div>
+        </ng-container>
 
-        <div class="row3 mt">
-          <div>
-            <label class="lb">Yil</label>
-            <input class="in" type="number" [(ngModel)]="editing.year" />
-          </div>
-          <div>
-            <label class="lb">Davomiyligi</label>
-            <input class="in" [(ngModel)]="editing.duration" placeholder="1s 45d" />
-          </div>
-          <div>
-            <label class="lb">Reyting</label>
-            <input class="in" type="number" step="0.1" [(ngModel)]="editing.rating" />
-          </div>
-        </div>
+        <label class="lb">Yil</label>
+        <input class="in" type="number" [(ngModel)]="editing.year" />
+
+        <label class="lb">Davomiyligi</label>
+        <input class="in" [(ngModel)]="editing.duration" placeholder="1s 45d" />
 
         <label class="lb">Janrlar (vergul bilan)</label>
         <input class="in" [(ngModel)]="genresText" placeholder="Drama, Komediya" />
 
         <div class="mon">
-          <div class="lb">Monetizatsiya sozlamalari</div>
+          <div class="lb first">Monetizatsiya sozlamalari</div>
           <label class="ck"><input type="checkbox" [(ngModel)]="editing.isVipIncluded" /> VIP'ga kiradi</label>
           <label class="ck"><input type="checkbox" [(ngModel)]="editing.isSinglePurchase" /> Alohida sotuvda</label>
           <label class="ck"><input type="checkbox" [(ngModel)]="editing.isPremium" /> Faqat VIP</label>
@@ -140,19 +122,18 @@ interface UploadState { progress: number; status: string; }
 
         <div *ngIf="editing.type !== 'movie'" class="eps">
           <div class="epsh">
-            <span class="lb">Epizodlar ({{ episodes.length }})</span>
+            <span class="lb first">Epizodlar ({{ episodes.length }})</span>
             <button class="b b-gray" (click)="addEpisode()">+ Qism qo'shish</button>
           </div>
           <div class="ep" *ngFor="let ep of episodes; let i = index">
             <div class="epn">{{ ep.episodeNumber }}-qism</div>
             <input class="in" [(ngModel)]="ep.title" placeholder="Qism nomi" />
             <label class="drop sm">
-              <span *ngIf="!up['ep' + i]">{{ ep.videoUrl ? 'Video tayyor (almashtirish)' : 'Video tanlang' }}</span>
-              <span *ngIf="up['ep' + i]">{{ up['ep' + i].status === 'ok' ? 'Yuklandi' : (up['ep' + i].progress + '%') }}</span>
+              <span *ngIf="!up['ep' + i]">{{ ep.videoUrl ? 'Video tayyor - almashtirish' : 'Video tanlash' }}</span>
+              <span *ngIf="up['ep' + i]">{{ up['ep' + i].status === 'ok' ? 'Yuklandi' : ('Yuklanmoqda... ' + up['ep' + i].progress + '%') }}</span>
               <input type="file" accept="video/*" (change)="onEpisodeFile($event, i)" hidden />
             </label>
-            <input class="in" [(ngModel)]="ep.videoUrl" placeholder="yoki video URL" />
-            <button class="ib d" (click)="removeEpisode(i)">&#10005;</button>
+            <button class="ib d" (click)="removeEpisode(i)">O'chirish</button>
           </div>
         </div>
 
@@ -202,28 +183,26 @@ interface UploadState { progress: number; status: string; }
     .ok { color: #34d399; font-size: 0.8rem; margin-top: 10px; }
     .er { color: #fca5a5; font-size: 0.8rem; margin-top: 10px; }
     .ov { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.9); display: flex; align-items: flex-start; justify-content: center; padding: 12px; overflow-y: auto; }
-    .md { position: relative; width: 100%; max-width: 640px; background: #121216; border: 1px solid #27272a; border-radius: 14px; padding: 16px; margin: auto; }
+    .md { position: relative; width: 100%; max-width: 520px; background: #121216; border: 1px solid #27272a; border-radius: 14px; padding: 16px; margin: auto; }
     .x { position: absolute; top: 10px; right: 10px; border: none; background: #27272a; color: #a1a1aa; border-radius: 8px; padding: 4px 8px; cursor: pointer; }
     .mh { font-size: 1rem; font-weight: 900; margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #27272a; }
-    .lb { display: block; font-size: 0.66rem; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 4px; }
-    .in { width: 100%; box-sizing: border-box; background: #18181b; border: 1px solid #3f3f46; border-radius: 10px; padding: 9px 11px; color: #fff; font-size: 0.82rem; outline: none; font-family: inherit; }
-    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-    .mt { margin-top: 10px; }
+    .lb { display: block; font-size: 0.68rem; font-weight: 800; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 5px; }
+    .lb.first { margin-top: 0; }
+    .in { display: block; width: 100%; box-sizing: border-box; background: #18181b; border: 1px solid #3f3f46; border-radius: 10px; padding: 11px 12px; color: #fff; font-size: 0.85rem; outline: none; font-family: inherit; }
     .box { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 10px; }
-    .prev { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 6px; }
-    .drop { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 60px; margin-bottom: 6px; border: 2px dashed #3f3f46; border-radius: 10px; background: #09090b; color: #d4d4d8; font-size: 0.75rem; cursor: pointer; padding: 8px; }
-    .drop.sm { min-height: 36px; margin: 6px 0; }
-    .bar { height: 4px; background: #27272a; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
-    .fill { height: 4px; background: #dc2626; transition: width 0.2s; }
-    .mon { margin-top: 10px; padding: 10px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
-    .ck { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 700; padding: 6px 0; }
-    .ck.big { margin-top: 12px; color: #60a5fa; }
-    .eps { margin-top: 12px; padding: 10px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
+    .prev { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+    .drop { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 64px; border: 2px dashed #3f3f46; border-radius: 10px; background: #09090b; color: #d4d4d8; font-size: 0.8rem; cursor: pointer; padding: 8px; word-break: break-all; }
+    .drop.sm { min-height: 40px; margin: 6px 0; }
+    .bar { height: 5px; background: #27272a; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .fill { height: 5px; background: #dc2626; transition: width 0.2s; }
+    .mon { margin-top: 14px; padding: 12px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
+    .ck { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 700; padding: 7px 0; }
+    .ck.big { margin-top: 14px; color: #60a5fa; }
+    .eps { margin-top: 14px; padding: 12px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
     .epsh { display: flex; justify-content: space-between; align-items: center; }
-    .ep { display: flex; flex-direction: column; gap: 4px; padding: 8px; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
-    .epn { font-size: 0.72rem; font-weight: 800; color: #fbbf24; }
-    .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+    .ep { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
+    .epn { font-size: 0.75rem; font-weight: 800; color: #fbbf24; }
+    .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
   `],
 })
 export class AdminContentComponent implements OnInit {
@@ -352,17 +331,17 @@ export class AdminContentComponent implements OnInit {
   private doUpload(file: File, kind: 'poster' | 'video', key: string, done: (url: string) => void): void {
     const fd = new FormData();
     fd.append(kind, file);
-    this.up[key] = { progress: 0, status: 'loading' };
+    this.up[key] = { progress: 0, status: 'loading', name: file.name };
     this.formError = '';
     this.http.post<any>(environment.apiUrl + '/upload/' + kind, fd, { reportProgress: true, observe: 'events' }).subscribe({
       next: (e: any) => {
         if (e.type === HttpEventType.UploadProgress && e.total) {
-          this.up[key] = { progress: Math.round((100 * e.loaded) / e.total), status: 'loading' };
+          this.up[key] = { progress: Math.round((100 * e.loaded) / e.total), status: 'loading', name: file.name };
         } else if (e.type === HttpEventType.Response) {
           const b = e.body || {};
           let url: string = b.url || (b.filename ? '/uploads/videos/' + b.filename : '');
           if (url && url.charAt(0) === '/') { url = this.origin + url; }
-          this.up[key] = { progress: 100, status: 'ok' };
+          this.up[key] = { progress: 100, status: 'ok', name: file.name };
           done(url);
         }
       },
@@ -377,8 +356,8 @@ export class AdminContentComponent implements OnInit {
     const e = this.editing;
     this.formError = '';
     if (!e.title || !String(e.title).trim()) { this.formError = 'Kontent nomini kiriting'; return; }
-    if (!e.posterUrl || !String(e.posterUrl).trim()) { this.formError = 'Poster rasmini yuklang yoki URL kiriting'; return; }
-    if (e.type === 'movie' && (!e.videoUrl || !String(e.videoUrl).trim())) { this.formError = 'Video faylni yuklang yoki URL kiriting'; return; }
+    if (!e.posterUrl || !String(e.posterUrl).trim()) { this.formError = 'Poster rasmini yuklang'; return; }
+    if (e.type === 'movie' && (!e.videoUrl || !String(e.videoUrl).trim())) { this.formError = 'Video faylni yuklang'; return; }
     if (e.type !== 'movie' && this.episodes.length === 0) { this.formError = 'Kamida 1 ta epizod qo\'shing'; return; }
 
     const genres = this.genresText.split(',').map((g) => g.trim()).filter((g) => g.length > 0);
