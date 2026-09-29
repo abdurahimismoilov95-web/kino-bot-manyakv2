@@ -23,9 +23,12 @@ async function bootstrap() {
   );
   app.use(compression());
 
+  // Autentifikatsiya Bearer token orqali (cookie yoq) - originni aks ettiramiz
   app.enableCors({
-    origin: config.get<string>('app.frontendUrl', '*'),
+    origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   app.useGlobalPipes(
