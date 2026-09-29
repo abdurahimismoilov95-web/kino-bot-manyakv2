@@ -124,9 +124,15 @@ export class ApiService {
     return this.http.get<any[]>(this.base + '/payments/receipts/mine');
   }
 
-  // --- Payments (admin) ---
+  // --- Payments (faqat bosh admin) ---
   getPendingReceipts(page = 1): Observable<PaginatedResult<any>> {
     return this.http.get<PaginatedResult<any>>(this.base + '/payments/receipts/pending', {
+      params: this.toParams({ page }),
+    });
+  }
+
+  getAllReceipts(page = 1): Observable<PaginatedResult<any>> {
+    return this.http.get<PaginatedResult<any>>(this.base + '/payments/receipts/all', {
       params: this.toParams({ page }),
     });
   }

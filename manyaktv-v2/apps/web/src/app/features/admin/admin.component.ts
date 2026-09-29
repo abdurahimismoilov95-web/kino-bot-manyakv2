@@ -1,5 +1,8 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+
+interface AdminTab { path: string; label: string; icon: string; superOnly?: boolean; }
 
 /** v1 AdminPanel.tsx yon menyusining Angular varianti (11 bolim). */
 @Component({
@@ -9,10 +12,12 @@ import { Router } from '@angular/router';
       <header class="admin-header">
         <div class="hd">
           <div class="hd-l">
-            <button class="back-btn" (click)="back()">&#8592;</button>
-            <h1>&#9881; Admin Panel</h1>
+            <button class="back-btn" (click)="back()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <h1>Admin Panel</h1>
           </div>
-          <span class="admin-badge">ADMIN</span>
+          <span class="admin-badge">{{ isSuper ? 'BOSH ADMIN' : 'ADMIN' }}</span>
         </div>
         <nav class="admin-tabs">
           <a
@@ -40,7 +45,7 @@ import { Router } from '@angular/router';
     .hd { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
     .hd-l { display: flex; align-items: center; gap: 12px; }
     .hd-l h1 { font-size: 1rem; font-weight: 800; margin: 0; }
-    .back-btn { background: none; border: none; color: #a1a1aa; font-size: 1.2rem; cursor: pointer; }
+    .back-btn { background: none; border: none; color: #a1a1aa; cursor: pointer; display: inline-flex; padding: 0; }
     .admin-badge {
       font-size: 0.62rem; font-weight: 900; color: #f87171;
       background: rgba(220,38,38,0.14); border: 1px solid rgba(153,27,27,0.8);
@@ -69,12 +74,12 @@ import { Router } from '@angular/router';
   `],
 })
 export class AdminComponent {
-  tabs = [
+  private readonly allTabs: AdminTab[] = [
     { path: 'dashboard', label: 'Statistika', icon: '\uD83D\uDCCA' },
     { path: 'content', label: 'Kino & Dramalar', icon: '\uD83C\uDFAC' },
     { path: 'users', label: 'Foydalanuvchilar', icon: '\uD83D\uDC65' },
     { path: 'catalogs', label: 'Ekran Kataloglari', icon: '\uD83D\uDDC2' },
-    { path: 'payments', label: 'Tolov cheklari', icon: '\uD83D\uDCB3' },
+    { path: 'payments', label: 'Tolov cheklari', icon: '\uD83D\uDCB3', superOnly: true },
     { path: 'plans', label: 'Tariflar', icon: '\uD83D\uDCC4' },
     { path: 'promos', label: 'Promokodlar', icon: '\uD83C\uDF81' },
     { path: 'admins', label: 'Adminlar', icon: '\uD83D\uDEE1' },
@@ -83,7 +88,18 @@ export class AdminComponent {
     { path: 'settings', label: 'Bot & Havolalar', icon: '\u2699' },
   ];
 
-  constructor(private readonly router: Router) {}
+  constructor(private readonly router: Router, private readonly auth: AuthService) {}
+
+  get isSuper(): boolean {
+    const u = this.auth.currentUser;
+    return !!u && u.role === 'super_admin';
+  }
+
+  /** Oddiy adminlarga bosh admin bolimlari (tolov cheklari) korinmaydi */
+  get tabs(): AdminTab[] {
+    const sup = this.isSuper;
+    return this.allTabs.filter((t) => sup || !t.superOnly);
+  }
 
   back(): void {
     this.router.navigate(['/profile']);

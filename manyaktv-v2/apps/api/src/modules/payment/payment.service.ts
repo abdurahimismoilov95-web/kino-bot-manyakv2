@@ -53,7 +53,17 @@ export class PaymentService {
       skip: (page - 1) * limit,
       take: limit,
     });
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+  }
+
+  async getAllReceipts(page = 1, limit = 20) {
+    const [data, total] = await this.receiptRepo.findAndCount({
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   }
 
   async getUserReceipts(userId: string) {
