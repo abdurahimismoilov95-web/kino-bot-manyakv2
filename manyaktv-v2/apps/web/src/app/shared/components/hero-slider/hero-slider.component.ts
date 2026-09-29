@@ -9,12 +9,15 @@ import { environment } from '../../../../environments/environment';
       <div class="hs-stage">
         <div class="hs-slide" *ngFor="let it of items; let i = index"
              [class.hs-on]="i === index">
-          <img [src]="backdrop(it)" [alt]="it?.title || ''" (error)="onImgError($event)" />
+          <div class="hs-ph">
+            <span class="hs-ph-t">{{ it?.title }}</span>
+          </div>
+          <img *ngIf="srcOf(it, i)" class="hs-img" [src]="srcOf(it, i)" [alt]="it?.title || ''" (error)="onImgError(it, i)" />
           <div class="hs-shade"></div>
 
           <div class="hs-body">
             <div class="hs-tags">
-              <span class="hs-tag-hot">&#128293; TREND</span>
+              <span class="hs-tag-hot"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5-1.5 5.5-1.5 8 0 1.4 1 2.5 2.3 2.5 1.6 0 2.4-1.3 2.2-3.2C17.6 11 19 13.4 19 16a7 7 0 0 1-14 0c0-4.3 3.4-6.9 5-9.2C11 5.4 11.8 3.8 12 2z"/></svg> TREND</span>
               <span class="hs-tag" *ngIf="it?.year">{{ it?.year }}</span>
               <span class="hs-tag hs-star" *ngIf="it?.rating">&#9733; {{ ratingOf(it) }}</span>
             </div>
@@ -24,7 +27,7 @@ import { environment } from '../../../../environments/environment';
 
             <div class="hs-actions">
               <button class="hs-play" (click)="play.emit(it)">
-                <span class="hs-ico">&#9654;</span> Tomosha qilish
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg> Tomosha qilish
               </button>
               <button class="hs-info" (click)="details.emit(it)">Batafsil</button>
             </div>
@@ -51,7 +54,18 @@ import { environment } from '../../../../environments/environment';
       transition: opacity 0.7s ease; pointer-events: none;
     }
     .hs-slide.hs-on { opacity: 1; pointer-events: auto; }
-    .hs-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hs-ph {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 18px; overflow: hidden;
+      background: radial-gradient(circle at 80% 30%, rgba(220,38,38,0.45), transparent 55%),
+                  radial-gradient(circle at 20% 80%, rgba(245,158,11,0.18), transparent 50%),
+                  linear-gradient(135deg, #1c1917, #09090b);
+    }
+    .hs-ph-t {
+      font-size: 64px; font-weight: 900; color: rgba(255,255,255,0.06);
+      text-transform: uppercase; letter-spacing: -0.03em; white-space: nowrap;
+    }
+    .hs-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
     .hs-shade {
       position: absolute; inset: 0;
       background:
@@ -67,6 +81,7 @@ import { environment } from '../../../../environments/environment';
     }
     .hs-star { color: #fbbf24; }
     .hs-tag-hot {
+      display: inline-flex; align-items: center; gap: 4px;
       font-size: 10px; font-weight: 900; color: #fff;
       background: linear-gradient(90deg, #dc2626, #b91c1c);
       padding: 2px 8px; border-radius: 6px; letter-spacing: 0.04em;
@@ -91,7 +106,6 @@ import { environment } from '../../../../environments/environment';
       box-shadow: 0 8px 22px rgba(220,38,38,0.45); cursor: pointer;
     }
     .hs-play:active { transform: scale(0.97); }
-    .hs-ico { font-size: 12px; }
     .hs-info {
       padding: 10px 18px; border-radius: 12px;
       background: rgba(39,39,42,0.8); color: #e4e4e7;
@@ -117,14 +131,8 @@ export class HeroSliderComponent implements OnInit, OnDestroy {
 
   index = 0;
   private timer: any = null;
-
-  private readonly fallback =
-    'data:image/svg+xml;utf8,' +
-    encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">' +
-        '<rect width="640" height="360" fill="#09090b"/>' +
-      '</svg>',
-    );
+  /** Har bir slayd uchun nechanchi rasm varianti sinalayotgani */
+  private attempt: Record<string, number> = {};
 
   ngOnInit(): void {
     this.timer = setInterval(() => {
@@ -141,23 +149,36 @@ export class HeroSliderComponent implements OnInit, OnDestroy {
 
   private abs(u: string): string {
     if (!u) { return ''; }
-    if (/^(https?:|data:)/i.test(u)) { return u; }
+    if (/^(https?:|data:|blob:)/i.test(u)) { return u; }
     const origin = String(environment.apiUrl || '').replace(/\/api\/v1\/?$/, '');
     return origin + (u.charAt(0) === '/' ? u : '/' + u);
   }
 
-  backdrop(it: any): string {
-    if (!it) { return this.fallback; }
-    const raw = it.backdropUrl || it.bannerUrl || it.posterUrl || '';
-    return raw ? this.abs(raw) : this.fallback;
+  private keyOf(it: any, i: number): string {
+    return String((it && it.id) || i);
+  }
+
+  /** Banner -> backdrop -> poster -> thumbnail ketma-ketligida sinaydi */
+  private candidates(it: any): string[] {
+    if (!it) { return []; }
+    const list = [it.bannerUrl, it.backdropUrl, it.posterUrl, it.thumbnailUrl]
+      .filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+      .map((u: string) => this.abs(u.trim()));
+    return list.filter((u, idx) => list.indexOf(u) === idx);
+  }
+
+  srcOf(it: any, i: number): string {
+    const list = this.candidates(it);
+    const n = this.attempt[this.keyOf(it, i)] || 0;
+    return n < list.length ? list[n] : '';
+  }
+
+  onImgError(it: any, i: number): void {
+    const k = this.keyOf(it, i);
+    this.attempt[k] = (this.attempt[k] || 0) + 1;
   }
 
   ratingOf(it: any): string {
     return it && it.rating ? Number(it.rating).toFixed(1) : '';
-  }
-
-  onImgError(event: Event): void {
-    const img = event.target as HTMLImageElement;
-    if (img && img.src !== this.fallback) { img.src = this.fallback; }
   }
 }
