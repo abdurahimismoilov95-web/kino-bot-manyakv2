@@ -5,6 +5,7 @@ import { UsersModule } from '../users/users.module';
 import { ContentModule } from '../content/content.module';
 import { PaymentModule } from '../payment/payment.module';
 import { EventsModule } from '../events/events.module';
+import { PanelModule } from '../panel/panel.module';
 import { User } from '../users/entities/user.entity';
 
 @Module({
@@ -14,6 +15,7 @@ import { User } from '../users/entities/user.entity';
     ContentModule,
     PaymentModule,
     EventsModule,
+    PanelModule,
   ],
   controllers: [AdminController],
 })

@@ -1,8 +1,8 @@
 import {
-  Controller, Post, UploadedFile, UseInterceptors,
+  Controller, Post, UploadedFile, UploadedFiles, UseInterceptors,
   UseGuards, BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/admin.guard';
@@ -57,17 +57,18 @@ export class UploadController {
     return { url: `/uploads/posters/${file.filename}` };
   }
 
+  /** Maydon nomi ('file' yoki 'receipt') farqi qilmaydi - birinchi rasm olinadi. */
   @Post('receipt')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Tolov cheki rasmi yuklash' })
   @UseInterceptors(
-    FileInterceptor('receipt', {
+    AnyFilesInterceptor({
       storage: diskStorage({
         destination: (_req, _file, cb) =>
           cb(null, ensureDir(path.join(UPLOADS_BASE, 'receipts'))),
         filename: safeFilename,
       }),
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
       fileFilter: (_req, file, cb) => {
         if (!file.mimetype.startsWith('image/')) {
           return cb(new BadRequestException('Only image files allowed'), false);
@@ -76,7 +77,8 @@ export class UploadController {
       },
     }),
   )
-  uploadReceipt(@UploadedFile() file: Express.Multer.File) {
+  uploadReceipt(@UploadedFiles() files: Express.Multer.File[]) {
+    const file = files && files[0];
     if (!file) throw new BadRequestException('File is required');
     return { url: `/uploads/receipts/${file.filename}` };
   }
