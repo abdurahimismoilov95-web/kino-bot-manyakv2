@@ -11,6 +11,7 @@ import { environment } from '../../../environments/environment';
  * Shorts (mini dramalar) lentasi.
  * v1 ShortsFeed.tsx dan kochirilgan: vertikal lenta, qism almashtirish,
  * ovoz boshqaruvi, yoqtirish, qulflangan qism, qismlar paneli.
+ * Ekranni yuqoriga/pastga surish bilan qism almashtiriladi.
  */
 @Component({
   selector: 'app-shorts',
@@ -27,7 +28,8 @@ import { environment } from '../../../environments/environment';
         <button class="btn btn-ghost" (click)="goHome()">Bosh sahifaga qaytish</button>
       </div>
 
-      <div class="stage" *ngIf="!loading && currentDrama">
+      <div class="stage" *ngIf="!loading && currentDrama"
+           (touchstart)="tStart($event)" (touchend)="tEnd($event)" (wheel)="onWheel($event)">
         <video
           #video
           class="video"
@@ -40,6 +42,8 @@ import { environment } from '../../../environments/environment';
           (timeupdate)="onTimeUpdate()"
           (error)="onVideoError()"
           (ended)="nextEpisode()"></video>
+
+        <div class="swipe-hint" *ngIf="hint">{{ hint }}</div>
 
         <div class="lock-overlay" *ngIf="isLocked">
           <p class="lock-glyph">&#128274;</p>
@@ -172,6 +176,8 @@ import { environment } from '../../../environments/environment';
       width: 100%;
       height: 100dvh;
       background: #000;
+      touch-action: pan-x;
+      overscroll-behavior: none;
     }
     .video {
       width: 100%;
@@ -179,6 +185,19 @@ import { environment } from '../../../environments/environment';
       object-fit: contain;
       background: #000;
       display: block;
+    }
+    .swipe-hint {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.65);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      z-index: 35;
+      pointer-events: none;
     }
     .lock-overlay {
       position: absolute; inset: 0;
@@ -406,10 +425,15 @@ export class ShortsComponent implements OnInit, OnDestroy {
   errorText = '';
   showEpisodes = false;
   progressPercent = 0;
+  hint = '';
 
   private hls: Hls | null = null;
   private saveTimer: any = null;
+  private hintTimer: any = null;
   private likes: Record<string, boolean> = {};
+  private tx = 0;
+  private ty = 0;
+  private wheelLock = false;
 
   constructor(
     private readonly api: ApiService,
@@ -434,7 +458,52 @@ export class ShortsComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.saveProgress();
     if (this.saveTimer) { clearInterval(this.saveTimer); }
+    if (this.hintTimer) { clearTimeout(this.hintTimer); }
     this.destroyHls();
+  }
+
+  // ── Surish (swipe) ──────────────────────────────────────────
+  tStart(e: TouchEvent): void {
+    const t = e.touches[0];
+    if (t) { this.tx = t.clientX; this.ty = t.clientY; }
+  }
+
+  tEnd(e: TouchEvent): void {
+    if (this.showEpisodes) { return; }
+    const t = e.changedTouches[0];
+    if (!t) { return; }
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest && target.closest('button, .drama-strip')) { return; }
+    const dy = this.ty - t.clientY;
+    const dx = Math.abs(this.tx - t.clientX);
+    if (Math.abs(dy) > 60 && dx < 60 && Math.abs(dy) > dx) {
+      if (dy > 0) { this.swipeNext(); } else { this.swipePrev(); }
+    }
+  }
+
+  onWheel(e: WheelEvent): void {
+    if (this.wheelLock || this.showEpisodes || Math.abs(e.deltaY) < 25) { return; }
+    this.wheelLock = true;
+    setTimeout(() => { this.wheelLock = false; }, 700);
+    if (e.deltaY > 0) { this.swipeNext(); } else { this.swipePrev(); }
+  }
+
+  private swipeNext(): void {
+    if (!this.hasNext) { this.showHint('Oxirgi qism'); return; }
+    this.showHint('Keyingi qism');
+    this.nextEpisode();
+  }
+
+  private swipePrev(): void {
+    if (!this.hasPrev) { this.showHint('Birinchi qism'); return; }
+    this.showHint('Oldingi qism');
+    this.prevEpisode();
+  }
+
+  private showHint(msg: string): void {
+    this.hint = msg;
+    if (this.hintTimer) { clearTimeout(this.hintTimer); }
+    this.hintTimer = setTimeout(() => { this.hint = ''; }, 900);
   }
 
   /** Nisbiy fayl manzillarini API origin bilan toldirish */
@@ -599,7 +668,6 @@ export class ShortsComponent implements OnInit, OnDestroy {
     const ep = this.currentEpisode;
     if (!drama) { return; }
 
-    // Qismlari yoq drama - bitta video
     if (!ep) {
       const direct = this.directUrl();
       if (direct) { this.playDirect(direct); }
