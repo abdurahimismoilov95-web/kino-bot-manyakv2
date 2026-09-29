@@ -13,7 +13,7 @@ import { StorageService } from '../../core/services/storage.service';
       <app-hero-slider
         [items]="heroItems"
         (play)="openWatch($event)"
-        (details)="openDetails($event)">
+        (details)="openWatch($event)">
       </app-hero-slider>
 
       <div class="hm-pad" *ngIf="isAdmin">
@@ -69,7 +69,7 @@ import { StorageService } from '../../core/services/storage.service';
         <div class="hm-row" *ngIf="!loadingTrending">
           <app-content-card *ngFor="let item of trending"
                             [item]="item" [hasAccess]="isVip"
-                            (click)="openDetails(item)"></app-content-card>
+                            (click)="openWatch(item)"></app-content-card>
         </div>
       </section>
 
@@ -81,7 +81,7 @@ import { StorageService } from '../../core/services/storage.service';
         <div class="hm-row" *ngIf="!loadingNew">
           <app-content-card *ngFor="let item of newItems"
                             [item]="item" [hasAccess]="isVip"
-                            (click)="openDetails(item)"></app-content-card>
+                            (click)="openWatch(item)"></app-content-card>
         </div>
       </section>
 
@@ -111,7 +111,7 @@ import { StorageService } from '../../core/services/storage.service';
         <div class="hm-grid">
           <app-content-card *ngFor="let item of gridItems"
                             [item]="item" [hasAccess]="isVip" variant="grid"
-                            (click)="openDetails(item)"></app-content-card>
+                            (click)="openWatch(item)"></app-content-card>
         </div>
         <div class="hm-empty" *ngIf="!loading && !gridItems.length">
           <div class="hm-empty-ico">&#9634;</div>
@@ -129,16 +129,9 @@ import { StorageService } from '../../core/services/storage.service';
     <app-store-showcase
       [items]="storeItems"
       [hasAccess]="isVip"
-      (select)="openDetails($event)"
+      (select)="openWatch($event)"
       (buy)="openPlans()">
     </app-store-showcase>
-
-    <app-content-details
-      [item]="selected"
-      (close)="selected = null"
-      (play)="openWatch($event)"
-      (favorite)="toggleFav($event)">
-    </app-content-details>
   `,
   styles: [`
     .hm { padding-bottom: 110px; background: #0f0f0f; min-height: 100dvh; }
@@ -259,7 +252,6 @@ export class HomeComponent implements OnInit {
   shorts: any[] = [];
   content: any[] = [];
   storeItems: any[] = [];
-  selected: any = null;
 
   activeType: string | null = null;
   showNewOnly = false;
@@ -389,14 +381,9 @@ export class HomeComponent implements OnInit {
     this.loadContent();
   }
 
-  openDetails(item: any): void {
-    if (!item) { return; }
-    this.selected = item;
-  }
-
+  /** Karta bosilganda modal ochilmaydi - to'g'ridan-to'g'ri pleyer */
   openWatch(item: any): void {
-    if (!item) { return; }
-    this.selected = null;
+    if (!item || !item.id) { return; }
     this.router.navigate(['/watch', item.id]);
   }
 
@@ -409,11 +396,6 @@ export class HomeComponent implements OnInit {
   posterOf(item: any): string {
     if (!item) { return ''; }
     return item.posterUrl || item.thumbnailUrl || '';
-  }
-
-  toggleFav(item: any): void {
-    if (!item) { return; }
-    this.api.toggleFavorite(item.id).subscribe({ error: () => { /* noop */ } });
   }
 
   private rows(r: any): any[] {
