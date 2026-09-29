@@ -85,9 +85,15 @@ export class AppComponent implements OnInit, OnDestroy {
       tg.ready?.();
       tg.expand();
       tg.enableClosingConfirmation();
+      /* Ekranni tepadan pastga surganda ilova yopilib/kichrayib ketmasin */
+      if (typeof tg.disableVerticalSwipes === 'function') {
+        tg.disableVerticalSwipes();
+      }
       tg.setHeaderColor('#0f0f0f');
       tg.setBackgroundColor('#0f0f0f');
     }
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
 
     try {
       if (!this.storage.getToken()) {
@@ -128,7 +134,6 @@ export class AppComponent implements OnInit, OnDestroy {
     await this.auth.refreshUser();
     const u = this.auth.currentUser;
     if (u && !u.isPhoneVerified) {
-      // server yangi holatni qaytarmagan bolsa ham, tasdiqlash o'tgan
       (u as any).isPhoneVerified = true;
     }
     this.cdr.detectChanges();

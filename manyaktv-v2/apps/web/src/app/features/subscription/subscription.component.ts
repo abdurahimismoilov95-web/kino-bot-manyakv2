@@ -1,12 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 
 /**
- * manyak-tv1 PaymentModal.tsx ning to'liq ko'chirmasi:
- * tarif tanlash -> promokod -> karta raqamini nusxalash -> chek rasmini
- * yuklash -> adminga yuborish -> tasdiqlashni kutish.
+ * To'lov sahifasi: VIP tarif yoki alohida kino sotib olish (vitrina).
+ * tarif/kino -> promokod -> karta -> chek rasmi -> adminga yuborish.
  */
 @Component({
   selector: 'app-subscription',
@@ -14,22 +13,34 @@ import { environment } from '../../../environments/environment';
     <div class="pay">
       <header class="ph">
         <button class="bk" (click)="back()">&#8592;</button>
-        <h1>VIP Obuna</h1>
+        <h1>{{ isSingle ? 'Kino sotib olish' : 'VIP Obuna' }}</h1>
         <span class="sp"></span>
       </header>
 
-      <!-- Muvaffaqiyat ekrani -->
       <div class="done" *ngIf="successMsg">
         <div class="done-i">&#10003;</div>
         <h2>Chek yuborildi</h2>
         <p>{{ successMsg }}</p>
-        <p class="done-s">Admin tasdiqlagach VIP avtomatik faollashadi. Bot orqali xabar keladi.</p>
+        <p class="done-s">Admin tasdiqlagach faollashadi. Bot orqali xabar keladi.</p>
         <button class="b b-red wide" (click)="back()">Bosh sahifaga</button>
       </div>
 
       <div *ngIf="!successMsg">
-        <!-- 1. Tarif tanlash -->
-        <section class="sec">
+        <section class="sec" *ngIf="isSingle">
+          <p class="sec-t">1. Tanlangan kino</p>
+          <div class="plan plan-on">
+            <div>
+              <p class="pl-n">{{ contentTitle }}</p>
+              <p class="pl-d">Alohida sotib olish</p>
+            </div>
+            <div class="pl-r">
+              <p class="pl-p">{{ money(contentPrice) }}</p>
+              <p class="pl-c">UZS</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="sec" *ngIf="!isSingle">
           <p class="sec-t">1. Tarifni tanlang</p>
           <p class="muted" *ngIf="loadingPlans">Yuklanmoqda...</p>
 
@@ -53,7 +64,6 @@ import { environment } from '../../../environments/environment';
           </p>
         </section>
 
-        <!-- 2. Promokod -->
         <section class="sec">
           <p class="sec-t">2. Promokod (ixtiyoriy)</p>
           <div class="promo">
@@ -69,7 +79,6 @@ import { environment } from '../../../environments/environment';
           <p class="pm" [class.pm-err]="promoError" *ngIf="promoMsg">{{ promoMsg }}</p>
         </section>
 
-        <!-- 3. To'lov -->
         <section class="sec">
           <p class="sec-t">3. Tolov qiling</p>
           <div class="card">
@@ -97,7 +106,6 @@ import { environment } from '../../../environments/environment';
           </div>
         </section>
 
-        <!-- 4. Chek -->
         <section class="sec">
           <p class="sec-t">4. Chek rasmini yuklang</p>
 
@@ -186,6 +194,11 @@ export class SubscriptionComponent implements OnInit {
   loadingPlans = false;
   selectedPlanId = '';
 
+  isSingle = false;
+  contentId = '';
+  contentTitle = '';
+  contentPrice = 0;
+
   promoInput = '';
   promoMsg = '';
   promoError = false;
@@ -209,18 +222,31 @@ export class SubscriptionComponent implements OnInit {
 
   private readonly MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
-  constructor(private readonly http: HttpClient, private readonly router: Router) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly router: Router,
+    private readonly route: ActivatedRoute,
+  ) {}
 
   ngOnInit(): void {
-    this.loadingPlans = true;
-    this.http.get<any>(this.base + '/plans').subscribe({
-      next: (r: any) => {
-        this.loadingPlans = false;
-        this.plans = Array.isArray(r) ? r : (r && r.data) || [];
-        if (this.plans.length > 0) { this.selectedPlanId = this.planId(this.plans[0]); }
-      },
-      error: () => { this.loadingPlans = false; },
-    });
+    const qp = this.route.snapshot.queryParamMap;
+    const cid = qp.get('contentId');
+    if (cid) {
+      this.isSingle = true;
+      this.contentId = cid;
+      this.contentTitle = qp.get('title') || 'Kino';
+      this.contentPrice = Number(qp.get('price') || 15000);
+    } else {
+      this.loadingPlans = true;
+      this.http.get<any>(this.base + '/plans').subscribe({
+        next: (r: any) => {
+          this.loadingPlans = false;
+          this.plans = Array.isArray(r) ? r : (r && r.data) || [];
+          if (this.plans.length > 0) { this.selectedPlanId = this.planId(this.plans[0]); }
+        },
+        error: () => { this.loadingPlans = false; },
+      });
+    }
 
     this.http.get<any>(this.base + '/settings').subscribe({
       next: (r: any) => {
@@ -244,6 +270,7 @@ export class SubscriptionComponent implements OnInit {
   }
 
   get basePrice(): number {
+    if (this.isSingle) { return this.contentPrice; }
     const p = this.selectedPlan;
     return Number((p && p.price) || 0);
   }
@@ -335,15 +362,30 @@ export class SubscriptionComponent implements OnInit {
 
   submit(): void {
     if (!this.receiptUrl) { return; }
+    if (!this.isSingle && !this.selectedPlanId) {
+      this.submitError = 'Tarifni tanlang.';
+      return;
+    }
     this.submitting = true;
     this.submitError = '';
-    this.http.post<any>(this.base + '/payments/receipt', {
-      planId: this.selectedPlanId,
+
+    const body: any = {
+      type: this.isSingle ? 'single_content' : 'subscription',
+      imageUrl: this.receiptUrl,
       amount: this.finalPrice,
       promoCode: this.appliedPromo || undefined,
-      receiptUrl: this.receiptUrl,
-      notes: this.notes.trim() || undefined,
-    }).subscribe({
+      discountPercent: this.discountPercent || 0,
+    };
+    if (this.isSingle) {
+      body.contentId = this.contentId;
+      body.contentTitle = this.contentTitle;
+    } else {
+      const p = this.selectedPlan;
+      body.planId = this.selectedPlanId;
+      body.planName = (p && (p.name || p.title)) || undefined;
+    }
+
+    this.http.post<any>(this.base + '/payments/receipts', body).subscribe({
       next: () => {
         this.submitting = false;
         this.successMsg = 'Chekingiz admin tekshiruviga yuborildi.';
