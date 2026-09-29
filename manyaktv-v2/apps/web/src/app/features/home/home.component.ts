@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { StorageService } from '../../core/services/storage.service';
+import { environment } from '../../../environments/environment';
 
 /** Bosh sahifa: faqat 4 bolim - Mini drama, Kino, Serial, Anime */
 @Component({
@@ -19,7 +20,7 @@ import { StorageService } from '../../core/services/storage.service';
       <div class="hm-pad" *ngIf="isAdmin">
         <div class="adm" (click)="goAdmin()">
           <div class="adm-l">
-            <span class="adm-ico">&#9881;</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg>
             <div>
               <div class="adm-row">
                 <h4>Admin Boshqaruv Paneli</h4>
@@ -44,7 +45,9 @@ import { StorageService } from '../../core/services/storage.service';
         <div class="vip-banner" (click)="openPlans()">
           <div class="vip-glow"></div>
           <div class="vip-left">
-            <div class="vip-ico">&#10022;</div>
+            <div class="vip-ico">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#fcd34d"><path d="M3 18h18l1-11-5 4-5-7-5 7-5-4z"/></svg>
+            </div>
             <div>
               <h4 class="vip-title">VIP obuna</h4>
               <p class="vip-sub">Barcha premium kinolar cheksiz</p>
@@ -128,7 +131,6 @@ import { StorageService } from '../../core/services/storage.service';
       box-shadow: 0 10px 24px rgba(0,0,0,0.4);
     }
     .adm-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .adm-ico { font-size: 20px; color: #f87171; }
     .adm-row { display: flex; align-items: center; gap: 6px; }
     .adm-row h4 { margin: 0; font-size: 12.5px; font-weight: 900; color: #fff; }
     .adm-badge {
@@ -169,7 +171,7 @@ import { StorageService } from '../../core/services/storage.service';
     .vip-ico {
       width: 40px; height: 40px; border-radius: 12px; background: #dc2626;
       display: flex; align-items: center; justify-content: center;
-      color: #fcd34d; font-size: 18px; box-shadow: 0 8px 20px rgba(220,38,38,0.4);
+      box-shadow: 0 8px 20px rgba(220,38,38,0.4);
     }
     .vip-title { margin: 0; font-size: 14px; font-weight: 900; color: #fff; }
     .vip-sub { margin: 2px 0 0; font-size: 11.5px; color: #a1a1aa; }
@@ -356,7 +358,11 @@ export class HomeComponent implements OnInit {
 
   posterOf(item: any): string {
     if (!item) { return ''; }
-    return item.posterUrl || item.thumbnailUrl || '';
+    const u: string = item.posterUrl || item.thumbnailUrl || '';
+    if (!u) { return ''; }
+    if (/^(https?:|data:|blob:)/i.test(u)) { return u; }
+    const origin = String(environment.apiUrl || '').replace(/\/api\/v\d+\/?$/, '').replace(/\/+$/, '');
+    return origin + (u.charAt(0) === '/' ? u : '/' + u);
   }
 
   private rows(r: any): any[] {
