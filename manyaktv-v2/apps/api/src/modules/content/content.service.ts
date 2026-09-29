@@ -124,6 +124,7 @@ export class ContentService {
           keep.add(found.id);
           found.title = e.title || found.title;
           found.videoUrl = e.videoUrl || null;
+          found.isFree = e.isFree === true;
           await this.episodeRepo.save(found);
         } else {
           const created = await this.episodeRepo.save(
@@ -133,6 +134,7 @@ export class ContentService {
               episodeNumber: num,
               title: e.title || num + '-qism',
               videoUrl: e.videoUrl || null,
+              isFree: e.isFree === true,
             }),
           );
           keep.add(created.id);

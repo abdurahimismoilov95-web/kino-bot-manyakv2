@@ -125,14 +125,28 @@ interface UploadState { progress: number; status: string; name: string; }
             <span class="lb first">Epizodlar ({{ episodes.length }})</span>
             <button class="b b-gray" (click)="addEpisode()">+ Qism qo'shish</button>
           </div>
+          <div class="freebar" *ngIf="episodes.length > 1">
+            <span class="fl">Tez tanlash:</span>
+            <button class="chip" (click)="freeFirst(1)">Faqat 1-qism bepul</button>
+            <button class="chip" (click)="freeFirst(3)">Dastlabki 3 ta bepul</button>
+            <button class="chip" (click)="freeFirst(0)">Hammasi pullik</button>
+            <button class="chip" (click)="freeFirst(9999)">Hammasi bepul</button>
+          </div>
           <div class="ep" *ngFor="let ep of episodes; let i = index">
-            <div class="epn">{{ ep.episodeNumber }}-qism</div>
+            <div class="epn">{{ ep.episodeNumber }}-qism
+              <span class="st fr" *ngIf="ep.isFree">BEPUL</span>
+              <span class="st pd" *ngIf="!ep.isFree">PULLIK</span>
+            </div>
             <input class="in" [(ngModel)]="ep.title" placeholder="Qism nomi" />
             <label class="drop sm">
               <span *ngIf="!up['ep' + i]">{{ ep.videoUrl ? 'Video tayyor - almashtirish' : 'Video tanlash' }}</span>
               <span *ngIf="up['ep' + i]">{{ up['ep' + i].status === 'ok' ? 'Yuklandi' : ('Yuklanmoqda... ' + up['ep' + i].progress + '%') }}</span>
               <input type="file" accept="video/*" (change)="onEpisodeFile($event, i)" hidden />
             </label>
+            <div class="seg">
+              <button type="button" class="sg" [class.on-free]="ep.isFree" (click)="ep.isFree = true">Bepul</button>
+              <button type="button" class="sg" [class.on-paid]="!ep.isFree" (click)="ep.isFree = false">Pullik</button>
+            </div>
             <button class="ib d" (click)="removeEpisode(i)">O'chirish</button>
           </div>
         </div>
@@ -200,8 +214,17 @@ interface UploadState { progress: number; status: string; name: string; }
     .ck.big { margin-top: 14px; color: #60a5fa; }
     .eps { margin-top: 14px; padding: 12px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
     .epsh { display: flex; justify-content: space-between; align-items: center; }
+    .freebar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+    .fl { font-size: 0.68rem; color: #a1a1aa; }
     .ep { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
-    .epn { font-size: 0.75rem; font-weight: 800; color: #fbbf24; }
+    .epn { font-size: 0.75rem; font-weight: 800; color: #fbbf24; display: flex; align-items: center; gap: 8px; }
+    .st { font-size: 0.6rem; border-radius: 4px; padding: 2px 6px; font-weight: 800; }
+    .st.fr { background: #064e3b; color: #34d399; }
+    .st.pd { background: #451a03; color: #fcd34d; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .sg { border: 1px solid #3f3f46; background: #18181b; color: #a1a1aa; border-radius: 10px; padding: 9px; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
+    .sg.on-free { background: #10b981; color: #fff; border-color: #10b981; }
+    .sg.on-paid { background: #f59e0b; color: #000; border-color: #f59e0b; }
     .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
   `],
 })
@@ -270,7 +293,12 @@ export class AdminContentComponent implements OnInit {
       this.genresText = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genres || '');
       this.editing.catalogId = item.catalogId || '';
       this.api.getContentById(item.id).subscribe({
-        next: (full: any) => { this.episodes = (full.episodes || []).map((e: any) => Object.assign({}, e)); },
+        next: (full: any) => {
+          this.episodes = (full.episodes || [])
+            .slice()
+            .sort((a: any, b: any) => (a.seasonNumber - b.seasonNumber) || (a.episodeNumber - b.episodeNumber))
+            .map((e: any) => Object.assign({}, e, { isFree: e.isFree === true }));
+        },
         error: () => { this.episodes = []; },
       });
       this.episodes = [];
@@ -297,7 +325,11 @@ export class AdminContentComponent implements OnInit {
 
   addEpisode(): void {
     const n = this.episodes.length + 1;
-    this.episodes.push({ seasonNumber: 1, episodeNumber: n, title: n + '-qism', videoUrl: '' });
+    this.episodes.push({ seasonNumber: 1, episodeNumber: n, title: n + '-qism', videoUrl: '', isFree: n === 1 });
+  }
+
+  freeFirst(count: number): void {
+    this.episodes.forEach((e, idx) => { e.isFree = idx < count; });
   }
 
   removeEpisode(i: number): void {
@@ -387,6 +419,7 @@ export class AdminContentComponent implements OnInit {
         episodeNumber: i + 1,
         title: ep.title || (i + 1) + '-qism',
         videoUrl: ep.videoUrl || null,
+        isFree: ep.isFree === true,
       }));
     }
 
