@@ -122,32 +122,39 @@ interface UploadState { progress: number; status: string; name: string; }
 
         <div *ngIf="editing.type !== 'movie'" class="eps">
           <div class="epsh">
-            <span class="lb first">Epizodlar ({{ episodes.length }})</span>
-            <button class="b b-gray" (click)="addEpisode()">+ Qism qo'shish</button>
-          </div>
-          <div class="freebar" *ngIf="episodes.length > 1">
-            <span class="fl">Tez tanlash:</span>
-            <button class="chip" (click)="freeFirst(1)">Faqat 1-qism bepul</button>
-            <button class="chip" (click)="freeFirst(3)">Dastlabki 3 ta bepul</button>
-            <button class="chip" (click)="freeFirst(0)">Hammasi pullik</button>
-            <button class="chip" (click)="freeFirst(9999)">Hammasi bepul</button>
-          </div>
-          <div class="ep" *ngFor="let ep of episodes; let i = index">
-            <div class="epn">{{ ep.episodeNumber }}-qism
-              <span class="st fr" *ngIf="ep.isFree">BEPUL</span>
-              <span class="st pd" *ngIf="!ep.isFree">PULLIK</span>
+            <div>
+              <h4 class="et">Qismlar Boshqaruvi (Epizodlar)</h4>
+              <p class="ed">Har bir qism videosini qurilmadan yuklang, bepul yoki pullik ekanini belgilang</p>
             </div>
-            <input class="in" [(ngModel)]="ep.title" placeholder="Qism nomi" />
-            <label class="drop sm">
-              <span *ngIf="!up['ep' + i]">{{ ep.videoUrl ? 'Video tayyor - almashtirish' : 'Video tanlash' }}</span>
-              <span *ngIf="up['ep' + i]">{{ up['ep' + i].status === 'ok' ? 'Yuklandi' : ('Yuklanmoqda... ' + up['ep' + i].progress + '%') }}</span>
-              <input type="file" accept="video/*" (change)="onEpisodeFile($event, i)" hidden />
-            </label>
-            <div class="seg">
-              <button type="button" class="sg" [class.on-free]="ep.isFree" (click)="ep.isFree = true">Bepul</button>
-              <button type="button" class="sg" [class.on-paid]="!ep.isFree" (click)="ep.isFree = false">Pullik</button>
+            <button type="button" class="b b-red bs" (click)="addEpisode()">+ Qism qo'shish</button>
+          </div>
+
+          <div class="egrid">
+            <div class="ecard" *ngFor="let ep of episodes; let i = index">
+              <div class="eth">
+                <img *ngIf="editing.posterUrl" class="eimg" [src]="abs(editing.posterUrl)" alt="" />
+                <span class="eok" *ngIf="ep.videoUrl">&#10003;</span>
+                <span class="ebad" *ngIf="!ep.videoUrl">&#10005;</span>
+                <div class="eprog" *ngIf="up['ep' + i]">
+                  <div class="ept">{{ up['ep' + i].status === 'ok' ? '100%' : (up['ep' + i].progress + '%') }}</div>
+                  <div class="epb"><div class="epf" [class.done]="up['ep' + i].status === 'ok'" [style.width.%]="up['ep' + i].progress"></div></div>
+                </div>
+                <div class="enum">{{ ep.episodeNumber }}-qism</div>
+              </div>
+              <div class="einfo">
+                <input class="etitle" [(ngModel)]="ep.title" [placeholder]="ep.episodeNumber + '-qism'" />
+                <button type="button" class="etog" [class.free]="ep.isFree" [class.paid]="!ep.isFree" (click)="ep.isFree = !ep.isFree">{{ ep.isFree ? 'BEPUL' : 'PULLIK' }}</button>
+                <div class="eact">
+                  <label class="eup" [class.dis]="up['ep' + i] && up['ep' + i].status === 'loading'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <input type="file" accept="video/*" (change)="onEpisodeFile($event, i)" hidden [disabled]="up['ep' + i] && up['ep' + i].status === 'loading'" />
+                  </label>
+                  <button type="button" class="edel" (click)="removeEpisode(i)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  </button>
+                </div>
+              </div>
             </div>
-            <button class="ib d" (click)="removeEpisode(i)">O'chirish</button>
           </div>
         </div>
 
@@ -172,6 +179,7 @@ interface UploadState { progress: number; status: string; name: string; }
     .h { font-size: 1rem; font-weight: 800; margin: 0; }
     .sub { font-size: 0.72rem; color: #a1a1aa; margin: 3px 0 0; }
     .b { border: none; border-radius: 12px; padding: 10px 14px; font-size: 0.78rem; font-weight: 800; cursor: pointer; color: #fff; }
+    .b.bs { border-radius: 8px; padding: 7px 10px; font-size: 0.7rem; white-space: nowrap; }
     .b-red { background: #dc2626; }
     .b-gray { background: #27272a; color: #d4d4d8; }
     .b:disabled { opacity: 0.5; }
@@ -206,25 +214,40 @@ interface UploadState { progress: number; status: string; name: string; }
     .box { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 10px; }
     .prev { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
     .drop { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 64px; border: 2px dashed #3f3f46; border-radius: 10px; background: #09090b; color: #d4d4d8; font-size: 0.8rem; cursor: pointer; padding: 8px; word-break: break-all; }
-    .drop.sm { min-height: 40px; margin: 6px 0; }
     .bar { height: 5px; background: #27272a; border-radius: 4px; overflow: hidden; margin-top: 8px; }
     .fill { height: 5px; background: #dc2626; transition: width 0.2s; }
     .mon { margin-top: 14px; padding: 12px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
     .ck { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 700; padding: 7px 0; }
     .ck.big { margin-top: 14px; color: #60a5fa; }
     .eps { margin-top: 14px; padding: 12px; border: 1px solid #27272a; border-radius: 12px; background: #18181b; }
-    .epsh { display: flex; justify-content: space-between; align-items: center; }
-    .freebar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
-    .fl { font-size: 0.68rem; color: #a1a1aa; }
-    .ep { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
-    .epn { font-size: 0.75rem; font-weight: 800; color: #fbbf24; display: flex; align-items: center; gap: 8px; }
-    .st { font-size: 0.6rem; border-radius: 4px; padding: 2px 6px; font-weight: 800; }
-    .st.fr { background: #064e3b; color: #34d399; }
-    .st.pd { background: #451a03; color: #fcd34d; }
-    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .sg { border: 1px solid #3f3f46; background: #18181b; color: #a1a1aa; border-radius: 10px; padding: 9px; font-size: 0.8rem; font-weight: 800; cursor: pointer; }
-    .sg.on-free { background: #10b981; color: #fff; border-color: #10b981; }
-    .sg.on-paid { background: #f59e0b; color: #000; border-color: #f59e0b; }
+    .epsh { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .et { margin: 0; font-size: 0.72rem; font-weight: 800; color: #f87171; text-transform: uppercase; letter-spacing: 0.04em; }
+    .ed { margin: 3px 0 0; font-size: 0.62rem; color: #a1a1aa; }
+    .egrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; max-height: 420px; overflow-y: auto; padding-right: 2px; }
+    .ecard { display: flex; flex-direction: column; background: #09090b; border: 1px solid #27272a; border-radius: 10px; }
+    .ecard:hover { border-color: #3f3f46; }
+    .eth { position: relative; width: 100%; aspect-ratio: 2 / 3; border-radius: 10px 10px 0 0; overflow: hidden; background: #18181b; }
+    .eimg { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; display: block; }
+    .eok, .ebad { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 900; }
+    .eok { background: rgba(16,185,129,0.25); color: #34d399; border: 1px solid #10b981; }
+    .ebad { background: rgba(220,38,38,0.25); color: #f87171; border: 1px solid #dc2626; }
+    .eprog { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; }
+    .ept { font-size: 0.6rem; font-weight: 800; margin-bottom: 4px; }
+    .epb { width: 100%; height: 4px; background: #27272a; border-radius: 4px; overflow: hidden; }
+    .epf { height: 4px; background: #ef4444; transition: width 0.2s; }
+    .epf.done { background: #10b981; }
+    .enum { position: absolute; left: 4px; right: 4px; bottom: 6px; text-align: center; font-size: 0.7rem; font-weight: 900; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+    .einfo { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+    .etitle { width: 100%; box-sizing: border-box; background: transparent; border: none; border-bottom: 1px solid transparent; color: #fff; font-size: 0.68rem; font-weight: 800; text-align: center; outline: none; padding: 2px 0; font-family: inherit; }
+    .etitle:focus { border-bottom-color: #ef4444; }
+    .etog { width: 100%; border-radius: 5px; padding: 4px 2px; font-size: 0.6rem; font-weight: 800; cursor: pointer; }
+    .etog.free { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
+    .etog.paid { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+    .eact { display: flex; gap: 4px; }
+    .eup { flex: 1; display: flex; align-items: center; justify-content: center; height: 26px; background: #27272a; color: #d4d4d8; border-radius: 6px; cursor: pointer; }
+    .eup.dis { opacity: 0.4; cursor: default; }
+    .edel { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #27272a; color: #71717a; border: none; border-radius: 6px; cursor: pointer; }
+    .edel:hover { color: #f87171; background: rgba(220,38,38,0.2); }
     .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
   `],
 })
@@ -328,10 +351,6 @@ export class AdminContentComponent implements OnInit {
     this.episodes.push({ seasonNumber: 1, episodeNumber: n, title: n + '-qism', videoUrl: '', isFree: n === 1 });
   }
 
-  freeFirst(count: number): void {
-    this.episodes.forEach((e, idx) => { e.isFree = idx < count; });
-  }
-
   removeEpisode(i: number): void {
     this.episodes.splice(i, 1);
     this.episodes.forEach((e, idx) => { e.episodeNumber = idx + 1; });
@@ -356,7 +375,12 @@ export class AdminContentComponent implements OnInit {
     const input = ev.target as HTMLInputElement;
     const file = input.files && input.files[0];
     if (!file) { return; }
-    this.doUpload(file, 'video', 'ep' + i, (url) => { this.episodes[i].videoUrl = url; });
+    const ep = this.episodes[i];
+    const key = 'ep' + i;
+    this.doUpload(file, 'video', key, (url) => {
+      ep.videoUrl = url;
+      setTimeout(() => { delete this.up[key]; }, 1500);
+    });
     input.value = '';
   }
 
