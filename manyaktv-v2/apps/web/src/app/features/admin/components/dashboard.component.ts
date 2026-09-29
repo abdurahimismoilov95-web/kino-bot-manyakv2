@@ -5,6 +5,8 @@ import { ApiService } from '../../../core/services/api.service';
   selector: 'app-admin-dashboard',
   template: `
     <div class="px-4 pt-5">
+      <app-admin-stats></app-admin-stats>
+
       <div class="grid grid-cols-2 gap-3 mb-6">
         <div class="stat-card" *ngFor="let s of stats">
           <p class="text-2xl font-bold" [class]="s.color">{{ s.value }}</p>
@@ -25,7 +27,7 @@ import { ApiService } from '../../../core/services/api.service';
         </div>
         <div *ngFor="let r of pendingPayments" class="pending-item">
           <div>
-            <p class="text-sm font-semibold">{{ r.planName || 'Nomalum reja' }}</p>
+            <p class="text-sm font-semibold">{{ r.planName || r.contentTitle || 'Nomalum reja' }}</p>
             <p class="text-xs text-gray-400">
               {{ r.amount | number }} som &bull; {{ r.createdAt | date: 'dd.MM HH:mm' }}
             </p>
