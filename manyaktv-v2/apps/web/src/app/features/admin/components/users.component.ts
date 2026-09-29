@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-admin-users',
@@ -155,7 +156,7 @@ export class AdminUsersComponent implements OnInit {
   totalPages = 1;
   search$ = new Subject<string>();
 
-  constructor(private api: ApiService) {
+  constructor(private api: ApiService, private dlg: DialogService) {
     this.search$.pipe(debounceTime(400), distinctUntilChanged()).subscribe(() => {
       this.page = 1;
       this.load();
@@ -164,6 +165,14 @@ export class AdminUsersComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+  }
+
+  private nameOf(u: any): string {
+    return (u.firstName || u.username || String(u.telegramId || u.id || '')).trim();
+  }
+
+  private fail(): void {
+    this.dlg.alert('Amal bajarilmadi. Qayta urinib koring.', 'Xato');
   }
 
   load() {
@@ -181,45 +190,53 @@ export class AdminUsersComponent implements OnInit {
   }
 
   grantVip(u: any) {
-    const days = prompt('Necha kun VIP berish?', '30');
-    if (!days || isNaN(+days)) return;
-    this.api.grantVip(u.id, +days).subscribe({
-      next: (updated: any) => {
-        Object.assign(u, updated);
-      },
+    this.dlg.prompt(this.nameOf(u) + ' ga necha kun VIP berilsin?', '30', { title: 'VIP berish', okText: 'Berish', inputType: 'number' }).then((days) => {
+      if (!days || isNaN(+days) || +days <= 0) { return; }
+      this.api.grantVip(u.id, +days).subscribe({
+        next: (updated: any) => { Object.assign(u, updated); },
+        error: () => this.fail(),
+      });
     });
   }
 
   revokeVip(u: any) {
-    if (!confirm(u.firstName + ' dan VIP olinsinmi?')) return;
-    this.api.revokeVip(u.id).subscribe({
-      next: (updated: any) => {
-        Object.assign(u, updated);
-      },
+    this.dlg.confirm(this.nameOf(u) + ' dan VIP olinsinmi?', { title: 'VIP ni olish', okText: 'Olish', danger: true }).then((ok) => {
+      if (!ok) { return; }
+      this.api.revokeVip(u.id).subscribe({
+        next: (updated: any) => { Object.assign(u, updated); },
+        error: () => this.fail(),
+      });
     });
   }
 
   ban(u: any) {
-    const reason = prompt('Ban sababi:');
-    if (!reason) return;
-    this.api.banUser(u.id, reason).subscribe({
-      next: (updated: any) => {
-        Object.assign(u, updated);
-      },
+    this.dlg.prompt(this.nameOf(u) + ' bloklanadi. Sababini yozing:', '', { title: 'Foydalanuvchini bloklash', okText: 'Bloklash', danger: true, placeholder: 'Ban sababi' }).then((reason) => {
+      if (!reason || !reason.trim()) { return; }
+      this.api.banUser(u.id, reason.trim()).subscribe({
+        next: (updated: any) => { Object.assign(u, updated); },
+        error: () => this.fail(),
+      });
     });
   }
 
   unban(u: any) {
-    this.api.unbanUser(u.id).subscribe({
-      next: (updated: any) => {
-        Object.assign(u, updated);
-      },
+    this.dlg.confirm(this.nameOf(u) + ' blokdan chiqarilsinmi?', { title: 'Blokdan chiqarish', okText: 'Chiqarish' }).then((ok) => {
+      if (!ok) { return; }
+      this.api.unbanUser(u.id).subscribe({
+        next: (updated: any) => { Object.assign(u, updated); },
+        error: () => this.fail(),
+      });
     });
   }
 
   resetHwid(u: any) {
-    if (!confirm(u.firstName + ' qurilma boglanishi bekor qilinsinmi?')) return;
-    this.api.resetHwid(u.id).subscribe({ next: () => alert('HWID ochirildi') });
+    this.dlg.confirm(this.nameOf(u) + ' qurilma boglanishi bekor qilinsinmi?', { title: 'HWID reset', okText: 'Reset', danger: true }).then((ok) => {
+      if (!ok) { return; }
+      this.api.resetHwid(u.id).subscribe({
+        next: () => { this.dlg.alert('HWID ochirildi', 'Tayyor'); },
+        error: () => this.fail(),
+      });
+    });
   }
 
   prevPage() {

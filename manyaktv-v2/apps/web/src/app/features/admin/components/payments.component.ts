@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 @Component({
   selector: 'app-admin-payments',
@@ -175,7 +176,7 @@ export class AdminPaymentsComponent implements OnInit {
   limit = 20;
   totalPages = 1;
 
-  constructor(private api: ApiService) {}
+  constructor(private api: ApiService, private dlg: DialogService) {}
 
   get emptyLabel(): string {
     return this.tab === 'pending' ? 'Kutilayotgan tolov yoq' : 'Tolov tarixi bosh';
@@ -215,26 +216,37 @@ export class AdminPaymentsComponent implements OnInit {
   }
 
   approve(r: any) {
-    r._loading = true;
-    this.api.approveReceipt(r.id).subscribe({
-      next: (updated: any) => {
-        Object.assign(r, updated);
-        r._loading = false;
-      },
-      error: () => (r._loading = false),
+    const label = (r.planName || 'Tolov') + ' - ' + (r.amount || 0) + ' som';
+    this.dlg.confirm(label + '. Chek tasdiqlansinmi?', { title: 'Tolovni tasdiqlash', okText: 'Tasdiqlash' }).then((ok) => {
+      if (!ok) { return; }
+      r._loading = true;
+      this.api.approveReceipt(r.id).subscribe({
+        next: (updated: any) => {
+          Object.assign(r, updated);
+          r._loading = false;
+        },
+        error: () => {
+          r._loading = false;
+          this.dlg.alert('Tasdiqlab bolmadi. Qayta urinib koring.', 'Xato');
+        },
+      });
     });
   }
 
   reject(r: any) {
-    const reason = prompt('Rad etish sababi:');
-    if (!reason) return;
-    r._loading = true;
-    this.api.rejectReceipt(r.id, reason).subscribe({
-      next: (updated: any) => {
-        Object.assign(r, updated);
-        r._loading = false;
-      },
-      error: () => (r._loading = false),
+    this.dlg.prompt('Rad etish sababini yozing:', '', { title: 'Chekni rad etish', okText: 'Rad etish', danger: true, placeholder: 'Masalan: chek notogri' }).then((reason) => {
+      if (!reason || !reason.trim()) { return; }
+      r._loading = true;
+      this.api.rejectReceipt(r.id, reason.trim()).subscribe({
+        next: (updated: any) => {
+          Object.assign(r, updated);
+          r._loading = false;
+        },
+        error: () => {
+          r._loading = false;
+          this.dlg.alert('Rad etib bolmadi. Qayta urinib koring.', 'Xato');
+        },
+      });
     });
   }
 
