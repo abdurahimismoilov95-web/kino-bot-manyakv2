@@ -1,13 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
+import * as path from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug'],
   });
 
@@ -22,6 +24,11 @@ async function bootstrap() {
     }),
   );
   app.use(compression());
+
+  // Yuklangan poster/video/chek fayllarini ochiq berish
+  app.useStaticAssets(path.resolve(process.env.UPLOADS_DIR || './uploads'), {
+    prefix: '/uploads',
+  });
 
   // Autentifikatsiya Bearer token orqali (cookie yoq) - originni aks ettiramiz
   app.enableCors({

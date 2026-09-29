@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminController } from './admin.controller';
+import { TelegramBroadcastService } from './telegram-broadcast.service';
 import { UsersModule } from '../users/users.module';
 import { ContentModule } from '../content/content.module';
 import { PaymentModule } from '../payment/payment.module';
@@ -18,5 +19,6 @@ import { User } from '../users/entities/user.entity';
     PanelModule,
   ],
   controllers: [AdminController],
+  providers: [TelegramBroadcastService],
 })
 export class AdminModule {}

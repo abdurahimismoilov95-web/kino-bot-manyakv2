@@ -43,7 +43,7 @@ export class UploadController {
           cb(null, ensureDir(path.join(UPLOADS_BASE, 'posters'))),
         filename: safeFilename,
       }),
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: 10 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
         if (!file.mimetype.startsWith('image/')) {
           return cb(new BadRequestException('Only image files allowed'), false);
@@ -86,7 +86,7 @@ export class UploadController {
   @Post('video')
   @AdminOnly()
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: '[Admin] Video fayl yuklash (HLS transcode uchun)' })
+  @ApiOperation({ summary: '[Admin] Video fayl yuklash' })
   @UseInterceptors(
     FileInterceptor('video', {
       storage: diskStorage({
@@ -105,9 +105,8 @@ export class UploadController {
   )
   uploadVideo(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('File is required');
-    const filePath = path.join(UPLOADS_BASE, 'videos', file.filename);
     return {
-      path: filePath,
+      url: `/uploads/videos/${file.filename}`,
       filename: file.filename,
       size: file.size,
     };

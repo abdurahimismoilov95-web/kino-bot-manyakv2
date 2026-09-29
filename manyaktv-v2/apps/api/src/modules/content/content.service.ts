@@ -28,7 +28,9 @@ export class ContentService {
 
   async findAll(q: ContentQuery = {}) {
     const { page = 1, limit = 20, search, type, genre, isPremium, isTrending, isFeatured } = q;
-    const qb = this.contentRepo.createQueryBuilder('c');
+    const qb = this.contentRepo
+      .createQueryBuilder('c')
+      .leftJoinAndSelect('c.episodes', 'ep');
 
     if (search) {
       qb.andWhere('(c.title ILIKE :s OR c.originalTitle ILIKE :s)', { s: `%${search}%` });
@@ -88,14 +90,64 @@ export class ContentService {
     });
   }
 
-  async create(data: Partial<Content>): Promise<Content> {
-    const content = this.contentRepo.create(data);
+  async create(data: any): Promise<Content> {
+    const content = this.contentRepo.create(data as Partial<Content>);
     return this.contentRepo.save(content);
   }
 
-  async update(id: string, data: Partial<Content>): Promise<Content> {
+  async update(id: string, data: any): Promise<Content> {
     await this.findById(id);
-    await this.contentRepo.update(id, data as any);
+    const rest: any = Object.assign({}, data);
+    const episodes = rest.episodes;
+    delete rest.episodes;
+    delete rest.id;
+    delete rest.createdAt;
+    delete rest.updatedAt;
+    delete rest.viewsCount;
+    delete rest.revenue;
+    delete rest.likesCount;
+    if (Object.keys(rest).length > 0) {
+      await this.contentRepo.update(id, rest);
+    }
+
+    if (Array.isArray(episodes)) {
+      const existing = await this.episodeRepo.find({ where: { contentId: id } });
+      const keep = new Set<string>();
+      for (let i = 0; i < episodes.length; i++) {
+        const e = episodes[i];
+        const season = e.seasonNumber || 1;
+        const num = e.episodeNumber || i + 1;
+        const found = existing.find(
+          (x) => x.seasonNumber === season && x.episodeNumber === num,
+        );
+        if (found) {
+          keep.add(found.id);
+          found.title = e.title || found.title;
+          found.videoUrl = e.videoUrl || null;
+          await this.episodeRepo.save(found);
+        } else {
+          const created = await this.episodeRepo.save(
+            this.episodeRepo.create({
+              contentId: id,
+              seasonNumber: season,
+              episodeNumber: num,
+              title: e.title || num + '-qism',
+              videoUrl: e.videoUrl || null,
+            }),
+          );
+          keep.add(created.id);
+        }
+      }
+      for (const old of existing) {
+        if (!keep.has(old.id)) {
+          try {
+            await this.episodeRepo.delete(old.id);
+          } catch {
+            /* tarix bilan bogliq epizod - otkazib yuboriladi */
+          }
+        }
+      }
+    }
     return this.findById(id);
   }
 
