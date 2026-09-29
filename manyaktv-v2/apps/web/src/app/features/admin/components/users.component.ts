@@ -36,7 +36,7 @@ import { ApiService } from '../../../core/services/api.service';
             </div>
             <p class="text-xs text-gray-400">&#64;{{ u.username || u.telegramId }}</p>
             <p class="text-xs text-gray-500">
-              Tokenlar: {{ u.tokens }} &bull; Streak: {{ u.checkinStreak }}
+              Tel: {{ u.phoneNumber || 'tasdiqlanmagan' }} &bull; ID: {{ u.telegramId || u.id }}
             </p>
           </div>
         </div>

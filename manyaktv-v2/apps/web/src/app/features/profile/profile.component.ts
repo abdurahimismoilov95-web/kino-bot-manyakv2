@@ -65,17 +65,11 @@ import { StorageService } from '../../core/services/storage.service';
         <button class="btn btn-red sm" (click)="goToSubscription()">Olish</button>
       </div>
 
-      <!-- Statistika: bitta qatorda -->
+      <!-- Statistika -->
       <div class="stats">
-        <div class="stat"><p class="stat-num amber">{{ tokens }}</p><p class="stat-label">Token</p></div>
-        <div class="stat"><p class="stat-num orange">{{ streak }}</p><p class="stat-label">Ketma-ket</p></div>
         <div class="stat"><p class="stat-num green">{{ historyCount }}</p><p class="stat-label">Korilgan</p></div>
-        <div class="stat"><p class="stat-num green">{{ bonusText }}</p><p class="stat-label">Bonus UZS</p></div>
+        <div class="stat"><p class="stat-num amber">{{ isVip ? (vipDaysLeft > 0 ? vipDaysLeft : '&#8734;') : 0 }}</p><p class="stat-label">VIP kun</p></div>
       </div>
-
-      <!-- Kunlik bonus -->
-      <button class="btn btn-checkin" (click)="checkin()" [disabled]="checkinDone || checkinLoading">{{ checkinLabel }}</button>
-      <p class="msg-ok" *ngIf="checkinMsg">{{ checkinMsg }}</p>
 
       <!-- Promokod -->
       <div class="promo-row">
@@ -169,12 +163,11 @@ import { StorageService } from '../../core/services/storage.service';
     .promo { border-color: rgba(220,38,38,0.35); background: linear-gradient(135deg, rgba(220,38,38,0.16), #18181b); }
     .warn { margin: -2px 0 8px; padding: 6px 10px; border-radius: 10px; background: rgba(220,38,38,0.14); border: 1px solid rgba(220,38,38,0.35); font-size: 0.7rem; color: #fca5a5; }
 
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 2px 0 10px; }
+    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 2px 0 10px; }
     .stat { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; }
     .stat-num { font-size: 0.95rem; font-weight: 800; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
     .stat-label { font-size: 0.58rem; color: #a1a1aa; margin: 2px 0 0; }
     .amber { color: #fbbf24; }
-    .orange { color: #f59e0b; }
     .green { color: #34d399; }
 
     .btn { border: none; border-radius: 10px; padding: 11px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: transform 0.12s, opacity 0.2s; }
@@ -184,7 +177,6 @@ import { StorageService } from '../../core/services/storage.service';
     .btn-red { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
     .btn-blue { background: #2563eb; color: #fff; }
     .btn-ghost { background: #27272a; color: #e4e4e7; }
-    .btn-checkin { width: 100%; background: linear-gradient(135deg, #f59e0b, #d97706); color: #1c1917; margin-bottom: 8px; padding: 10px; }
     .msg-ok { font-size: 0.74rem; color: #34d399; margin: 0 0 8px; }
 
     .promo-row { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -214,10 +206,6 @@ export class ProfileComponent implements OnInit {
   historyCount = 0;
 
   verifyOpen = false;
-
-  checkinDone = false;
-  checkinLoading = false;
-  checkinMsg = '';
 
   promoInput = '';
   promoMsg = '';
@@ -279,12 +267,12 @@ export class ProfileComponent implements OnInit {
   }
 
   get phone(): string {
-    return this.user?.phone || '';
+    return this.user?.phoneNumber || this.user?.phone || '';
   }
 
   get isVerified(): boolean {
     if (!this.user) { return false; }
-    return !!(this.user.isPhoneVerified || this.user.isVerified || this.user.phone);
+    return !!(this.user.isPhoneVerified || this.user.isVerified || this.phone);
   }
 
   get avatar(): string {
@@ -298,23 +286,6 @@ export class ProfileComponent implements OnInit {
   get isAdmin(): boolean {
     const role = this.user?.role;
     return role === 'admin' || role === 'super_admin' || !!this.user?.isAdmin;
-  }
-
-  get tokens(): number {
-    return this.user?.tokens || this.user?.accessTokens || 0;
-  }
-
-  get bonusText(): string {
-    const v = this.user?.bonusBalance || 0;
-    try {
-      return Number(v).toLocaleString('ru-RU');
-    } catch {
-      return String(v);
-    }
-  }
-
-  get streak(): number {
-    return this.user?.checkinStreak || 0;
   }
 
   get vipDaysLeft(): number {
@@ -338,12 +309,6 @@ export class ProfileComponent implements OnInit {
     return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear();
   }
 
-  get checkinLabel(): string {
-    if (this.checkinDone) { return 'Bugun bonus olindi'; }
-    if (this.checkinLoading) { return 'Yuklanmoqda...'; }
-    return 'Kunlik bonus olish';
-  }
-
   onAvatarError(event: Event): void {
     const img = event.target as HTMLImageElement;
     if (img.src !== this.fallbackAvatar) { img.src = this.fallbackAvatar; }
@@ -359,33 +324,6 @@ export class ProfileComponent implements OnInit {
     this.api.getMe().subscribe({
       next: (fresh: any) => { this.user = fresh; },
       error: () => undefined,
-    });
-  }
-
-  checkin(): void {
-    this.checkinLoading = true;
-    this.checkinMsg = '';
-    this.api.dailyCheckin().subscribe({
-      next: (r: any) => {
-        this.checkinLoading = false;
-        this.checkinDone = true;
-        const earned = r?.tokensEarned || 0;
-        const st = r?.streak || 0;
-        this.checkinMsg = '+' + earned + ' token! Ketma-ketlik: ' + st + ' kun';
-        if (this.user) {
-          this.user.tokens = (this.user.tokens || 0) + earned;
-          this.user.checkinStreak = st;
-        }
-      },
-      error: (err: any) => {
-        this.checkinLoading = false;
-        if (err?.status === 409) {
-          this.checkinDone = true;
-          this.checkinMsg = 'Bugun allaqachon olgansiz.';
-        } else {
-          this.showAlert('Xatolik', 'Bonus olinmadi. Keyinroq qayta urinib koring.');
-        }
-      },
     });
   }
 
