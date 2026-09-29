@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { environment } from '../../../../environments/environment';
 
 /** manyak-tv1 HeroSlider.tsx dizayni */
 @Component({
@@ -138,9 +139,17 @@ export class HeroSliderComponent implements OnInit, OnDestroy {
 
   go(i: number): void { this.index = i; }
 
+  private abs(u: string): string {
+    if (!u) { return ''; }
+    if (/^(https?:|data:)/i.test(u)) { return u; }
+    const origin = String(environment.apiUrl || '').replace(/\/api\/v1\/?$/, '');
+    return origin + (u.charAt(0) === '/' ? u : '/' + u);
+  }
+
   backdrop(it: any): string {
     if (!it) { return this.fallback; }
-    return it.backdropUrl || it.bannerUrl || it.posterUrl || this.fallback;
+    const raw = it.backdropUrl || it.bannerUrl || it.posterUrl || '';
+    return raw ? this.abs(raw) : this.fallback;
   }
 
   ratingOf(it: any): string {
