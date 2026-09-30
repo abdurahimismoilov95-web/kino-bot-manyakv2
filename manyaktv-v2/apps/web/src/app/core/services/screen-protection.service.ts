@@ -69,12 +69,17 @@ export class ScreenProtectionService implements OnDestroy {
         if (this.tgActivated) tg.offEvent('activated', this.tgActivated);
       }
     } catch { /* e'tiborsiz */ }
-    this.globalKeydownHandler = this.globalKeyupHandler = null;
+    this.globalKeydownHandler = null;
+    this.globalKeyupHandler = null;
     this.globalCopyHandler = null;
     this.globalCtxHandler = null;
-    this.visibilityHandler = this.blurHandler = this.focusHandler = null;
-    this.pageHideHandler = this.pageShowHandler = null;
-    this.tgDeactivated = this.tgActivated = null;
+    this.visibilityHandler = null;
+    this.blurHandler = null;
+    this.focusHandler = null;
+    this.pageHideHandler = null;
+    this.pageShowHandler = null;
+    this.tgDeactivated = null;
+    this.tgActivated = null;
     this.reasons.clear();
     this.refreshBlackout();
   }
@@ -95,8 +100,11 @@ export class ScreenProtectionService implements OnDestroy {
     if (this.moveTimer) clearInterval(this.moveTimer);
     if (this.devToolsTimer) clearInterval(this.devToolsTimer);
     if (this.videoEl) { this.videoEl.style.visibility = ''; }
-    this.watermarkEl = this.overlayEl = this.videoEl = null;
-    this.moveTimer = this.devToolsTimer = null;
+    this.watermarkEl = null;
+    this.overlayEl = null;
+    this.videoEl = null;
+    this.moveTimer = null;
+    this.devToolsTimer = null;
     this.reasons.delete('devtools');
     this.reasons.delete('blur');
     this.refreshBlackout();
@@ -240,7 +248,6 @@ export class ScreenProtectionService implements OnDestroy {
       if (shotKeys.has(e.key) || shotKeys.has(e.code)) {
         e.preventDefault(); e.stopPropagation(); this.flashBlack(2500); return;
       }
-      // Win+Shift+S, Cmd+Shift+3/4/5
       if (e.shiftKey && (e.metaKey || e.ctrlKey) && macShot.has(e.code)) {
         this.flashBlack(3000);
       }
@@ -248,10 +255,11 @@ export class ScreenProtectionService implements OnDestroy {
         e.preventDefault(); e.stopPropagation(); this.flashWarning(); return;
       }
       if ((e.ctrlKey || e.metaKey) && blockedWithCtrl.has(e.code)) {
-        e.preventDefault(); e.stopPropagation();
+        const t = e.target as HTMLElement;
+        const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+        if (!typing) { e.preventDefault(); e.stopPropagation(); }
       }
     };
-    // Windows da PrintScreen faqat keyup beradi
     this.globalKeyupHandler = (e: KeyboardEvent): void => {
       if (shotKeys.has(e.key) || shotKeys.has(e.code)) { this.flashBlack(2500); }
     };
@@ -264,3 +272,100 @@ export class ScreenProtectionService implements OnDestroy {
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'VIDEO' || target.tagName === 'IMG' || target.closest('.player-container'))) {
         e.preventDefault(); e.stopPropagation();
+      }
+    };
+    document.addEventListener('contextmenu', this.globalCtxHandler, { capture: true });
+  }
+
+  private hookClipboard(): void {
+    this.globalCopyHandler = (e: ClipboardEvent): void => {
+      if (!window.getSelection()?.toString()) e.preventDefault();
+    };
+    document.addEventListener('copy', this.globalCopyHandler as EventListener);
+  }
+
+  // ---------------- PLEYER ----------------
+  private injectCssOverlay(container: HTMLElement): void {
+    const el = document.createElement('div');
+    el.setAttribute('data-role', 'sc-guard');
+    Object.assign(el.style, {
+      position: 'absolute', inset: '0', zIndex: '4',
+      pointerEvents: 'none', mixBlendMode: 'difference',
+      backgroundColor: 'rgba(255,255,255,0.0001)',
+    } as unknown as CSSStyleDeclaration);
+    container.appendChild(el);
+    this.overlayEl = el;
+  }
+
+  private injectWatermark(container: HTMLElement): void {
+    const user: any = this.auth.currentUser;
+    const uid = user ? (user.username ? '@' + user.username : 'TG:' + user.telegramId) : 'MANYAK TV';
+    const now = new Date().toLocaleDateString('uz-UZ');
+    const el = document.createElement('div');
+    el.setAttribute('data-role', 'sc-watermark');
+    el.textContent = 'MANYAK TV | ' + uid + ' | ' + now;
+    Object.assign(el.style, {
+      position: 'absolute', zIndex: '6', pointerEvents: 'none',
+      color: 'rgba(255,255,255,0.09)', fontSize: '10px',
+      fontFamily: 'system-ui, sans-serif', fontWeight: '600',
+      whiteSpace: 'nowrap', userSelect: 'none',
+      transition: 'top 1.2s ease, left 1.2s ease', top: '50%', left: '50%',
+    } as unknown as CSSStyleDeclaration);
+    container.appendChild(el);
+    this.watermarkEl = el;
+  }
+
+  private startWatermarkMovement(): void {
+    const positions: Array<[string, string]> = [
+      ['12%', '8%'], ['55%', '15%'], ['20%', '60%'], ['60%', '65%'],
+      ['35%', '35%'], ['70%', '40%'], ['8%', '75%'], ['72%', '8%'],
+    ];
+    let idx = 0;
+    const move = (): void => {
+      if (!this.watermarkEl) return;
+      const [top, left] = positions[idx % positions.length];
+      this.watermarkEl.style.top = top;
+      this.watermarkEl.style.left = left;
+      idx++;
+    };
+    move();
+    this.moveTimer = setInterval(move, 4000);
+  }
+
+  private startDevToolsDetection(): void {
+    const check = (): void => {
+      if (!window.outerWidth || !window.outerHeight) return;
+      const isOpen = (window.outerWidth - window.innerWidth) > this.DEV_TOOLS_THRESHOLD ||
+                     (window.outerHeight - window.innerHeight) > this.DEV_TOOLS_THRESHOLD;
+      if (isOpen) {
+        this.pauseVideo();
+        this.showBlackout('devtools');
+      } else if (this.reasons.has('devtools')) {
+        this.hideBlackout('devtools');
+      }
+    };
+    this.devToolsTimer = setInterval(check, 1000);
+  }
+
+  private injectPrintBlockCss(): void {
+    if (document.getElementById('sc-print-block')) return;
+    const style = document.createElement('style');
+    style.id = 'sc-print-block';
+    style.textContent =
+      '@media print { body * { visibility: hidden !important; } body::after { visibility: visible !important; display: block !important; content: "MANYAK TV - chop etish taqiqlangan" !important; font-size: 28px !important; color: #e50914 !important; text-align: center !important; margin-top: 40vh !important; } }' +
+      ' video, img { -webkit-touch-callout: none; -webkit-user-drag: none; }';
+    document.head.appendChild(style);
+  }
+
+  private flashWarning(): void {
+    const flash = document.createElement('div');
+    Object.assign(flash.style, {
+      position: 'fixed', inset: '0', background: 'rgba(229,9,20,0.2)',
+      zIndex: '999999', pointerEvents: 'none', opacity: '1', transition: 'opacity 0.4s ease',
+    } as unknown as CSSStyleDeclaration);
+    document.body.appendChild(flash);
+    requestAnimationFrame(() => {
+      setTimeout(() => { flash.style.opacity = '0'; setTimeout(() => flash.remove(), 450); }, 200);
+    });
+  }
+}
