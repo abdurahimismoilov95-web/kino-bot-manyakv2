@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/admin.guard';
-import { AdminOnly } from '../../common/decorators/roles.decorator';
+import { AdminOnly, SuperAdminOnly } from '../../common/decorators/roles.decorator';
 import { UsersService } from '../users/users.service';
 import { ContentService } from '../content/content.service';
 import { PaymentService } from '../payment/payment.service';
@@ -169,6 +169,8 @@ export class AdminController {
     };
   }
 
+  /** Hamma foydalanuvchilarga xabar yuborish - faqat bosh admin */
+  @SuperAdminOnly()
   @Post('broadcast')
   @ApiOperation({ summary: 'Xabar yuborish (SSE yoki Telegram)' })
   async broadcast(@Body() body: any) {

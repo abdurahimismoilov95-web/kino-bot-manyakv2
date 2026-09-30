@@ -37,6 +37,14 @@ export class AuthService {
     this.additionalAdminIds = new Set(additionalIds);
   }
 
+  /** Vaqtga bog'liq hujumlardan himoyalangan solishtirish */
+  private safeEqual(a: string, b: string): boolean {
+    const ba = Buffer.from(String(a || ''));
+    const bb = Buffer.from(String(b || ''));
+    if (ba.length === 0 || ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  }
+
   async verifyTelegram(dto: VerifyDto): Promise<{ token: string; user: User }> {
     const userData = this.validateInitData(dto.initData);
     if (!userData) throw new UnauthorizedException('Invalid Telegram initData');
@@ -61,6 +69,10 @@ export class AuthService {
       user.lastName = userData.last_name ?? null;
       user.username = userData.username ?? null;
       user.lastSeenAt = new Date();
+      // Bosh admin ID si har doim bosh admin bo'lib qoladi
+      if (this.superAdminIds.has(telegramId) && user.role !== UserRole.SUPER_ADMIN) {
+        user.role = UserRole.SUPER_ADMIN;
+      }
       user = await this.userRepo.save(user);
     }
 
@@ -77,6 +89,7 @@ export class AuthService {
 
   validateInitData(initData: string): TelegramWebAppData | null {
     try {
+      if (!initData || initData.length > 4096 || !this.botToken) return null;
       const params = new URLSearchParams(initData);
       const hash = params.get('hash');
       if (!hash) return null;
@@ -86,12 +99,15 @@ export class AuthService {
         .map(([k, v]) => `${k}=${v}`).join('\n');
       const secretKey = crypto.createHmac('sha256', 'WebAppData').update(this.botToken).digest();
       const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-      if (expectedHash !== hash) return null;
+      if (!this.safeEqual(expectedHash, hash)) return null;
       const authDate = parseInt(params.get('auth_date') || '0', 10);
-      if (Math.floor(Date.now() / 1000) - authDate > 300) return null;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (!authDate || nowSec - authDate > 300 || authDate - nowSec > 60) return null;
       const userParam = params.get('user');
       if (!userParam) return null;
-      return JSON.parse(decodeURIComponent(userParam)) as TelegramWebAppData;
+      const parsed = JSON.parse(decodeURIComponent(userParam)) as TelegramWebAppData;
+      if (!parsed || !parsed.id) return null;
+      return parsed;
     } catch { return null; }
   }
 
@@ -107,11 +123,11 @@ export class AuthService {
 
   async adminBrowserLogin(dto: { telegramId: string; secret: string }): Promise<{ token: string; user: User }> {
     const expectedSecret = this.config.get<string>('app.adminBrowserSecret', '');
-    if (!expectedSecret || dto.secret !== expectedSecret)
+    if (!expectedSecret || !this.safeEqual(String(dto.secret || ''), expectedSecret))
       throw new UnauthorizedException('Invalid credentials');
 
-    const user = await this.userRepo.findOne({ where: { telegramId: dto.telegramId } });
-    if (!user) throw new UnauthorizedException('User not found');
+    const user = await this.userRepo.findOne({ where: { telegramId: String(dto.telegramId || '') } });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
 
     if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN)
       throw new ForbiddenException('Access denied: admin only');

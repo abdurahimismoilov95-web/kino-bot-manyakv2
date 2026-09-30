@@ -60,7 +60,7 @@ export class PanelService {
         actorId: actor ? actor.id : null,
         actorName: actor ? actor.firstName : null,
         action,
-        description: description || null,
+        description: description ? String(description).slice(0, 1000) : null,
       });
       await this.auditRepo.save(row);
     } catch {
@@ -70,6 +70,10 @@ export class PanelService {
 
   listAudit(): Promise<AuditLog[]> {
     return this.auditRepo.find({ order: { createdAt: 'DESC' }, take: 200 });
+  }
+
+  listAuditByActor(actorId: string): Promise<AuditLog[]> {
+    return this.auditRepo.find({ where: { actorId }, order: { createdAt: 'DESC' }, take: 200 });
   }
 
   // ---------- tariflar ----------
@@ -176,6 +180,40 @@ export class PanelService {
       .where('u.role IN (:...roles)', { roles: ['admin', 'super_admin'] })
       .orderBy('u.created_at', 'ASC')
       .getMany();
+  }
+
+  /** Bosh admin uchun: har bir admin + harakatlar soni + oxirgi amali */
+  async listAdminsWithStats(): Promise<any[]> {
+    const admins = await this.listAdmins();
+    const out: any[] = [];
+    for (const a of admins) {
+      let actionsCount = 0;
+      let last: AuditLog | null = null;
+      try {
+        actionsCount = await this.auditRepo.count({ where: { actorId: a.id } });
+        last = await this.auditRepo.findOne({ where: { actorId: a.id }, order: { createdAt: 'DESC' } });
+      } catch {
+        /* e'tiborsiz */
+      }
+      out.push({
+        id: a.id,
+        telegramId: a.telegramId,
+        firstName: a.firstName,
+        lastName: a.lastName,
+        username: a.username,
+        role: a.role,
+        isBanned: a.isBanned,
+        banReason: a.banReason,
+        bannedAt: a.bannedAt,
+        lastSeenAt: a.lastSeenAt,
+        createdAt: a.createdAt,
+        actionsCount,
+        lastAction: last
+          ? { action: last.action, description: last.description, createdAt: last.createdAt }
+          : null,
+      });
+    }
+    return out;
   }
 
   findUser(id: string): Promise<User | null> {

@@ -2,9 +2,9 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 
-interface AdminTab { path: string; label: string; icon: string; superOnly?: boolean; }
+interface AdminTab { path: string; label: string; superOnly?: boolean; }
 
-/** v1 AdminPanel.tsx yon menyusining Angular varianti (11 bolim). */
+/** v1 AdminPanel.tsx yon menyusining Angular varianti. */
 @Component({
   selector: 'app-admin',
   template: `
@@ -25,7 +25,6 @@ interface AdminTab { path: string; label: string; icon: string; superOnly?: bool
             [routerLink]="tab.path"
             routerLinkActive="admin-tab-active"
             class="admin-tab">
-            <span class="t-i">{{ tab.icon }}</span>
             <span class="t-l">{{ tab.label }}</span>
           </a>
         </nav>
@@ -69,33 +68,32 @@ interface AdminTab { path: string; label: string; icon: string; superOnly?: bool
       border-color: #ef4444 !important;
       color: #fff !important;
     }
-    .t-i { font-size: 0.85rem; }
     .admin-content { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
   `],
 })
 export class AdminComponent {
   private readonly allTabs: AdminTab[] = [
-    { path: 'dashboard', label: 'Statistika', icon: '\uD83D\uDCCA' },
-    { path: 'content', label: 'Kino & Dramalar', icon: '\uD83C\uDFAC' },
-    { path: 'users', label: 'Foydalanuvchilar', icon: '\uD83D\uDC65' },
-    { path: 'catalogs', label: 'Ekran Kataloglari', icon: '\uD83D\uDDC2' },
-    { path: 'payments', label: 'Tolov cheklari', icon: '\uD83D\uDCB3', superOnly: true },
-    { path: 'plans', label: 'Tariflar', icon: '\uD83D\uDCC4' },
-    { path: 'promos', label: 'Promokodlar', icon: '\uD83C\uDF81' },
-    { path: 'admins', label: 'Adminlar', icon: '\uD83D\uDEE1' },
-    { path: 'audit', label: 'Audit Jurnali', icon: '\uD83D\uDCDC' },
-    { path: 'broadcast', label: 'Xabar Yuborish', icon: '\uD83D\uDCE3' },
-    { path: 'settings', label: 'Bot & Havolalar', icon: '\u2699' },
+    { path: 'dashboard', label: 'Statistika' },
+    { path: 'content', label: 'Kino & Dramalar' },
+    { path: 'users', label: 'Foydalanuvchilar' },
+    { path: 'catalogs', label: 'Ekran Kataloglari' },
+    { path: 'payments', label: 'Tolov cheklari', superOnly: true },
+    { path: 'plans', label: 'Tariflar' },
+    { path: 'promos', label: 'Promokodlar' },
+    { path: 'admins', label: 'Adminlar', superOnly: true },
+    { path: 'audit', label: 'Audit Jurnali', superOnly: true },
+    { path: 'broadcast', label: 'Xabar Yuborish', superOnly: true },
+    { path: 'settings', label: 'Bot & Havolalar', superOnly: true },
   ];
 
   constructor(private readonly router: Router, private readonly auth: AuthService) {}
 
   get isSuper(): boolean {
-    const u = this.auth.currentUser;
+    const u: any = this.auth.currentUser;
     return !!u && u.role === 'super_admin';
   }
 
-  /** Oddiy adminlarga bosh admin bolimlari (tolov cheklari) korinmaydi */
+  /** Oddiy adminlarga faqat bosh admin bolimlari korinmaydi */
   get tabs(): AdminTab[] {
     const sup = this.isSuper;
     return this.allTabs.filter((t) => sup || !t.superOnly);

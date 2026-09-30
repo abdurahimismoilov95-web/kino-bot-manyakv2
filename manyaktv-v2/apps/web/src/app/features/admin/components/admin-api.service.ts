@@ -64,7 +64,7 @@ export class AdminApiService {
     return this.http.get<any>(this.base + '/admin/audit-logs');
   }
 
-  // Adminlar
+  // Adminlar (faqat bosh admin)
   getAdmins(): Observable<any> {
     return this.http.get<any>(this.base + '/admin/admins');
   }
@@ -73,5 +73,14 @@ export class AdminApiService {
   }
   removeAdmin(id: string): Observable<any> {
     return this.http.delete<any>(this.base + '/admin/admins/' + id);
+  }
+  getAdminLogs(id: string): Observable<any> {
+    return this.http.get<any>(this.base + '/admin/admins/' + id + '/logs');
+  }
+  blockAdmin(id: string, reason: string): Observable<any> {
+    return this.http.post<any>(this.base + '/admin/admins/' + id + '/block', { reason });
+  }
+  unblockAdmin(id: string): Observable<any> {
+    return this.http.post<any>(this.base + '/admin/admins/' + id + '/unblock', {});
   }
 }

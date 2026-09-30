@@ -15,7 +15,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/admin.guard';
-import { AdminOnly } from '../../common/decorators/roles.decorator';
+import { AdminOnly, SuperAdminOnly } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
 import { DEFAULT_CATALOGS, DEFAULT_SETTINGS, PanelService } from './panel.service';
@@ -38,9 +38,9 @@ export class PanelAdminController {
   @Put('catalogs')
   async saveCatalogs(@Body() body: { catalogs?: any[] }, @CurrentUser() admin: User) {
     const list = Array.isArray(body && body.catalogs) ? (body.catalogs as any[]) : [];
-    const clean = list.map((c: any, i: number) => ({
-      id: String((c && c.id) || 'cat_' + i),
-      title: String((c && c.title) || ''),
+    const clean = list.slice(0, 50).map((c: any, i: number) => ({
+      id: String((c && c.id) || 'cat_' + i).slice(0, 64),
+      title: String((c && c.title) || '').slice(0, 80),
       isVisible: c && c.isVisible !== false,
       order: i,
     }));
@@ -95,41 +95,50 @@ export class PanelAdminController {
     return { ok: true };
   }
 
-  // ----- Sozlamalar -----
+  // ----- Sozlamalar (ozgartirish faqat bosh admin) -----
   @Get('settings')
   getSettings() {
     return this.panel.getGeneral();
   }
 
+  @SuperAdminOnly()
   @Put('settings')
   async saveSettings(@Body() body: Record<string, unknown>, @CurrentUser() admin: User) {
     const clean: Record<string, string> = {};
     Object.keys(DEFAULT_SETTINGS).forEach((k) => {
       const v = body ? body[k] : undefined;
-      if (v !== undefined && v !== null) { clean[k] = String(v).trim(); }
+      if (v !== undefined && v !== null) { clean[k] = String(v).trim().slice(0, 300); }
     });
     await this.panel.setSetting('general', clean);
     await this.panel.log(admin, 'settings.save', Object.keys(clean).join(', '));
     return this.panel.getGeneral();
   }
 
-  // ----- Audit -----
+  // ----- Audit (faqat bosh admin) -----
+  @SuperAdminOnly()
   @Get('audit-logs')
   auditLogs() {
     return this.panel.listAudit();
   }
 
-  // ----- Adminlar (faqat super admin) -----
+  // ----- Adminlar (faqat bosh admin) -----
+  @SuperAdminOnly()
   @Get('admins')
   admins() {
-    return this.panel.listAdmins();
+    return this.panel.listAdminsWithStats();
   }
 
+  @SuperAdminOnly()
+  @Get('admins/:id/logs')
+  async adminLogs(@Param('id') id: string) {
+    const user = await this.panel.findUser(id);
+    if (!user) { throw new NotFoundException('Admin topilmadi'); }
+    return this.panel.listAuditByActor(user.id);
+  }
+
+  @SuperAdminOnly()
   @Post('admins')
   async addAdmin(@Body() body: { telegramId?: string }, @CurrentUser() actor: User) {
-    if (actor.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Faqat super admin admin qosha oladi');
-    }
     const id = String((body && body.telegramId) || '').trim();
     if (!/^[0-9]{3,20}$/.test(id)) {
       throw new BadRequestException('Telegram ID faqat raqamlardan iborat bolishi kerak');
@@ -152,11 +161,39 @@ export class PanelAdminController {
     return saved;
   }
 
+  @SuperAdminOnly()
+  @Post('admins/:id/block')
+  async blockAdmin(@Param('id') id: string, @Body() body: { reason?: string }, @CurrentUser() actor: User) {
+    const user = await this.panel.findUser(id);
+    if (!user) { throw new NotFoundException('Admin topilmadi'); }
+    if (user.role === UserRole.SUPER_ADMIN || user.id === actor.id) {
+      throw new ForbiddenException('Bosh adminni bloklab bolmaydi');
+    }
+    const reason = String((body && body.reason) || '').trim().slice(0, 300);
+    user.isBanned = true;
+    user.banReason = reason || 'Bosh admin tomonidan bloklandi';
+    user.bannedAt = new Date();
+    await this.panel.saveUser(user);
+    await this.panel.log(actor, 'admin.block', user.telegramId + (reason ? ' - ' + reason : ''));
+    return { ok: true };
+  }
+
+  @SuperAdminOnly()
+  @Post('admins/:id/unblock')
+  async unblockAdmin(@Param('id') id: string, @CurrentUser() actor: User) {
+    const user = await this.panel.findUser(id);
+    if (!user) { throw new NotFoundException('Admin topilmadi'); }
+    user.isBanned = false;
+    user.banReason = null;
+    user.bannedAt = null;
+    await this.panel.saveUser(user);
+    await this.panel.log(actor, 'admin.unblock', user.telegramId);
+    return { ok: true };
+  }
+
+  @SuperAdminOnly()
   @Delete('admins/:id')
   async removeAdmin(@Param('id') id: string, @CurrentUser() actor: User) {
-    if (actor.role !== UserRole.SUPER_ADMIN) {
-      throw new ForbiddenException('Faqat super admin adminni olib tashlay oladi');
-    }
     const user = await this.panel.findUser(id);
     if (!user) { throw new NotFoundException('Foydalanuvchi topilmadi'); }
     if (user.role === UserRole.SUPER_ADMIN) {
