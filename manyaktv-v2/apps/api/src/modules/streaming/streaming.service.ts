@@ -1,15 +1,24 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { createHmac } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { HlsAuthCacheService } from './hls-auth.cache';
 import { User } from '../users/entities/user.entity';
 import { Content } from '../content/entities/content.entity';
 
+/**
+ * Imzo siri. Hammaga ma'lum standart qiymat ishlatilmaydi:
+ * env bo'lmasa har ishga tushishda tasodifiy sir yaratiladi.
+ */
+const SIGNING_SECRET =
+  process.env.FILE_SIGNING_SECRET && process.env.FILE_SIGNING_SECRET.length >= 16
+    ? process.env.FILE_SIGNING_SECRET
+    : randomBytes(32).toString('hex');
+
 @Injectable()
 export class StreamingService {
   private readonly logger = new Logger(StreamingService.name);
-  private readonly signingSecret = process.env.FILE_SIGNING_SECRET || 'dev_secret';
+  private readonly signingSecret = SIGNING_SECRET;
   private readonly hlsBase = process.env.NGINX_HLS_BASE_URL || 'http://localhost/hls';
   private readonly tokenTtlSeconds = 600;
 
@@ -19,22 +28,28 @@ export class StreamingService {
     private readonly hlsCache: HlsAuthCacheService,
   ) {}
 
-  async getContentStreamUrl(contentId: string, userId: string) {
-    const content = await this.contentRepo.findOneOrFail({ where: { id: contentId } });
-    const user = await this.userRepo.findOneOrFail({ where: { id: userId } });
+  private async checkAccess(contentId: string, userId: string): Promise<void> {
+    const content = await this.contentRepo.findOne({ where: { id: contentId } });
+    if (!content) throw new UnauthorizedException('Kontent topilmadi');
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('Foydalanuvchi topilmadi');
 
-    if (content.isPremium && !user.isVip) {
-      throw new UnauthorizedException('VIP obuna kerak');
-    }
     if (user.isBanned) {
       throw new UnauthorizedException('Akkaunt bloklangan');
     }
+    if (content.isPremium && !user.isVip) {
+      throw new UnauthorizedException('VIP obuna kerak');
+    }
+  }
+
+  async getContentStreamUrl(contentId: string, userId: string) {
+    await this.checkAccess(contentId, userId);
 
     const { token, exp } = this.generateToken(userId);
-    const baseUrl = `${this.hlsBase}/${contentId}`;
+    const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}`;
 
     return {
-      masterPlaylist: `${baseUrl}/master.m3u8?uid=${userId}&exp=${exp}&sig=${token}`,
+      masterPlaylist: `${baseUrl}/master.m3u8?uid=${encodeURIComponent(userId)}&exp=${exp}&sig=${token}`,
       availableQualities: ['480p', '720p', '1080p'],
       defaultQuality: '720p',
       tokenExpiry: exp,
@@ -42,21 +57,13 @@ export class StreamingService {
   }
 
   async getEpisodeStreamUrl(contentId: string, episodeId: string, userId: string) {
-    const content = await this.contentRepo.findOneOrFail({ where: { id: contentId } });
-    const user = await this.userRepo.findOneOrFail({ where: { id: userId } });
-
-    if (content.isPremium && !user.isVip) {
-      throw new UnauthorizedException('VIP obuna kerak');
-    }
-    if (user.isBanned) {
-      throw new UnauthorizedException('Akkaunt bloklangan');
-    }
+    await this.checkAccess(contentId, userId);
 
     const { token, exp } = this.generateToken(userId);
-    const baseUrl = `${this.hlsBase}/${contentId}/episodes/${episodeId}`;
+    const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}/episodes/${encodeURIComponent(episodeId)}`;
 
     return {
-      masterPlaylist: `${baseUrl}/master.m3u8?uid=${userId}&exp=${exp}&sig=${token}`,
+      masterPlaylist: `${baseUrl}/master.m3u8?uid=${encodeURIComponent(userId)}&exp=${exp}&sig=${token}`,
       availableQualities: ['480p', '720p', '1080p'],
       defaultQuality: '720p',
       tokenExpiry: exp,
@@ -65,9 +72,13 @@ export class StreamingService {
 
   async verifyStreamToken(uid: string, exp: string, sig: string): Promise<boolean> {
     if (!uid || !exp || !sig) return false;
+    if (!/^[a-f0-9]{64}$/i.test(sig) || !/^\d{1,12}$/.test(exp) || uid.length > 64) return false;
 
     const cached = await this.hlsCache.getCached(uid, sig);
-    if (cached === 'allow') return true;
+    if (cached === 'allow') {
+      // Kesh bo'lsa ham muddat tekshiriladi
+      return Date.now() / 1000 <= parseInt(exp, 10);
+    }
     if (cached === 'deny') return false;
 
     const result = await this.verifyFromDb(uid, exp, sig);
@@ -77,14 +88,14 @@ export class StreamingService {
 
   private async verifyFromDb(uid: string, exp: string, sig: string): Promise<boolean> {
     const expNum = parseInt(exp, 10);
-    if (isNaN(expNum) || Date.now() / 1000 > expNum) {
-      this.logger.debug(`Token expired for uid=${uid}`);
+    const now = Date.now() / 1000;
+    if (isNaN(expNum) || now > expNum || expNum - now > this.tokenTtlSeconds + 60) {
       return false;
     }
 
     const expectedSig = this.computeHmac(uid, exp);
-    if (!this.timingSafeEqual(sig, expectedSig)) {
-      this.logger.warn(`Invalid sig for uid=${uid}`);
+    if (!this.safeEqual(sig.toLowerCase(), expectedSig)) {
+      this.logger.warn(`Invalid stream sig for uid=${uid}`);
       return false;
     }
 
@@ -107,12 +118,10 @@ export class StreamingService {
     return createHmac('sha256', this.signingSecret).update(`${uid}:${exp}`).digest('hex');
   }
 
-  private timingSafeEqual(a: string, b: string): boolean {
-    if (a.length !== b.length) return false;
-    let diff = 0;
-    for (let i = 0; i < a.length; i++) {
-      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-    }
-    return diff === 0;
+  private safeEqual(a: string, b: string): boolean {
+    const x = Buffer.from(String(a || ''));
+    const y = Buffer.from(String(b || ''));
+    if (x.length !== y.length) return false;
+    return timingSafeEqual(x, y);
   }
 }

@@ -7,6 +7,19 @@ const TELEGRAM_API_BASE = 'https://api.telegram.org';
 /** Render static site manzili. WEBAPP_URL env bolmasa shu ishlatiladi. */
 const DEFAULT_WEBAPP_URL = 'https://manyaktv-web1.onrender.com';
 
+/** Xotirada saqlanadigan kutilayotgan tasdiqlashlar soni chegarasi (xotira to'lib ketmasligi uchun) */
+const MAX_PENDING = 5000;
+
+/** Foydalanuvchi ismini HTML xabarga xavfsiz qo'yish */
+function escapeHtml(s: string): string {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .slice(0, 64);
+}
+
 type TelegramUpdate = {
   message?: {
     chat?: { id?: number };
@@ -60,7 +73,7 @@ export class BotService {
     return url.replace(/\/+$/, '');
   }
 
-  /** Telegram Bot API ga sorov yuborish */
+  /** Telegram Bot API ga sorov yuborish (token logga hech qachon yozilmaydi) */
   private async call(method: string, payload: unknown): Promise<void> {
     const token = this.token;
     if (!token) {
@@ -78,10 +91,10 @@ export class BotService {
       });
       if (!res.ok) {
         const body = await res.text();
-        this.logger.warn(method + ' xato: ' + res.status + ' ' + body);
+        this.logger.warn(method + ' xato: ' + res.status + ' ' + body.slice(0, 300));
       }
     } catch (err) {
-      this.logger.error(method + ' yuborilmadi', err as Error);
+      this.logger.error(method + ' yuborilmadi: ' + String((err as Error)?.message || err));
     }
   }
 
@@ -142,6 +155,15 @@ export class BotService {
     });
   }
 
+  private rememberPending(chatId: number, code: string): void {
+    if (this.pendingVerify.size >= MAX_PENDING && !this.pendingVerify.has(chatId)) {
+      const oldest = this.pendingVerify.keys().next().value;
+      if (oldest !== undefined) this.pendingVerify.delete(oldest);
+    }
+    this.pendingVerify.delete(chatId);
+    this.pendingVerify.set(chatId, code);
+  }
+
   /** Webhook dan kelgan update ni qayta ishlash */
   async handleUpdate(update: TelegramUpdate): Promise<void> {
     if (update.callback_query) {
@@ -173,16 +195,16 @@ export class BotService {
     }
 
     const text = (message?.text || '').trim();
-    const name = message?.from?.first_name || 'dost';
+    const name = escapeHtml(message?.from?.first_name || 'dost');
 
     if (text.startsWith('/start')) {
       const payload = text.slice('/start'.length).trim();
 
       // 2) Saytdan kelgan tasdiqlash havolasi: /start v_KOD (yoki auth_KOD)
-      const match = /^(?:v_|auth_|verify_)([A-Za-z0-9_-]+)$/.exec(payload);
+      const match = /^(?:v_|auth_|verify_)([A-Za-z0-9_-]{4,64})$/.exec(payload);
       if (match) {
         const code = match[1];
-        this.pendingVerify.set(chatId, code);
+        this.rememberPending(chatId, code);
 
         await this.sendMessage(
           chatId,
