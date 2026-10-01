@@ -41,7 +41,7 @@ import { DialogService } from '../../../core/services/dialog.service';
               <p class="r-n">{{ displayName(a) }}
                 <span class="tag" [class.tag-s]="a.role === 'super_admin'">{{ a.role === 'super_admin' ? 'BOSH ADMIN' : 'ADMIN' }}</span>
               </p>
-              <p class="r-i">ID: {{ a.telegramId || a.id }}<span *ngIf="a.username"> &middot; @{{ a.username }}</span></p>
+              <p class="r-i">ID: {{ a.telegramId || a.id }}<span *ngIf="a.username"> &middot; &#64;{{ a.username }}</span></p>
             </div>
             <span class="st" [class.st-b]="a.isBanned">{{ a.isBanned ? 'Bloklangan' : 'Faol' }}</span>
           </div>
