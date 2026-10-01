@@ -56,6 +56,9 @@ export class AppComponent implements OnInit, OnDestroy {
   showSplash = true;
   isMiniApp = false;
 
+  /** Bot xabaridagi tugmadan kelgan havola: ?open=<kontentId>&ep=<qismId> */
+  private pendingOpen: { id: string; ep: string } | null = null;
+
   constructor(
     private readonly auth: AuthService,
     private readonly storage: StorageService,
@@ -80,6 +83,7 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.readDeepLink();
     this.screenGuard.activateGlobal();
 
     const tg = (window as any).Telegram?.WebApp;
@@ -142,8 +146,35 @@ export class AppComponent implements OnInit, OnDestroy {
     this.ensureRouteActivated();
   }
 
+  /** URL dagi ?open= va ?ep= parametrlarini o'qiydi (faqat xavfsiz belgilar). */
+  private readDeepLink(): void {
+    try {
+      const qs = new URLSearchParams(window.location.search || '');
+      const id = (qs.get('open') || '').trim();
+      const ep = (qs.get('ep') || '').trim();
+      const safe = /^[A-Za-z0-9_-]{1,64}$/;
+      if (id && safe.test(id)) {
+        this.pendingOpen = { id, ep: ep && safe.test(ep) ? ep : '' };
+      }
+    } catch {
+      this.pendingOpen = null;
+    }
+  }
+
+  private targetUrl(): string {
+    if (this.pendingOpen && !this.needsVerify) {
+      const p = this.pendingOpen;
+      this.pendingOpen = null;
+      return '/watch/' + encodeURIComponent(p.id) + (p.ep ? '?ep=' + encodeURIComponent(p.ep) : '');
+    }
+    if (this.pendingOpen) {
+      return '/';
+    }
+    return this.router.url && this.router.url !== '/' ? this.router.url : '/';
+  }
+
   private ensureRouteActivated(): void {
-    const url = this.router.url && this.router.url !== '/' ? this.router.url : '/';
+    const url = this.targetUrl();
     setTimeout(() => {
       this.router.navigateByUrl('/__reload', { skipLocationChange: true })
         .catch(() => undefined)

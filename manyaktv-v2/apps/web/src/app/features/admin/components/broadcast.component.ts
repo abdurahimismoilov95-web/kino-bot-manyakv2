@@ -1,8 +1,16 @@
 import { Component } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { AdminApiService } from './admin-api.service';
+import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Content, Episode } from '../../../core/models/admin.models';
 import { environment } from '../../../../environments/environment';
+
+interface BroadcastResult {
+  ok?: boolean;
+  error?: string;
+  total?: number;
+}
 
 /** v1 AdminPanel -> "Xabar Yuborish" bolimi (Telegram bot orqali). */
 @Component({
@@ -20,10 +28,45 @@ import { environment } from '../../../../environments/environment';
         <ul>
           <li>Xabar ro'yxatdan o'tgan foydalanuvchilarga yuboriladi</li>
           <li>Yuborish bir necha daqiqa davom etishi mumkin</li>
+          <li>Kino yoki qism tanlansa, tugma web app'da aynan shu qismni ochadi. Sotib olganlar darhol ko'radi, olmaganlarga obuna sotib olish oynasi chiqadi</li>
         </ul>
       </div>
 
       <div class="form">
+        <label class="lb">Qaysi kino / dramaga yo'naltirish (ixtiyoriy)</label>
+        <div class="target" *ngIf="target">
+          <img *ngIf="posterOf(target)" [src]="posterOf(target)" alt="" />
+          <div class="target-info">
+            <b>{{ target.title }}</b>
+            <span>{{ typeLabel(target.type) }}{{ target.isPremium ? ' - pullik' : ' - bepul' }}</span>
+          </div>
+          <button class="x" (click)="clearTarget()" title="Bekor qilish">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="srch" *ngIf="!target">
+          <input class="in" [(ngModel)]="search" placeholder="Kino yoki drama nomi..." (keyup.enter)="findContent()" />
+          <button class="b-sm" [disabled]="searching" (click)="findContent()">{{ searching ? '...' : 'Qidirish' }}</button>
+        </div>
+        <div class="res" *ngIf="!target && results.length">
+          <button class="res-i" *ngFor="let c of results" (click)="chooseContent(c)">
+            <img *ngIf="posterOf(c)" [src]="posterOf(c)" alt="" />
+            <span class="res-t">{{ c.title }}</span>
+            <span class="res-k">{{ typeLabel(c.type) }}</span>
+          </button>
+        </div>
+
+        <ng-container *ngIf="target && targetEpisodes.length">
+          <label class="lb">Qism</label>
+          <select class="in" [ngModel]="targetEpId" (ngModelChange)="targetEpId = $event; applyTarget()">
+            <option value="">Boshidan (1-qism)</option>
+            <option *ngFor="let e of targetEpisodes" [value]="e.id">
+              {{ e.seasonNumber > 1 ? (e.seasonNumber + '-fasl, ') : '' }}{{ e.episodeNumber }}-qism {{ e.isFree ? '(bepul)' : '(pullik)' }}
+            </option>
+          </select>
+        </ng-container>
+
         <label class="lb">Sarlavha</label>
         <input class="in" [(ngModel)]="title" placeholder="Yangi kinolar!" />
 
@@ -45,7 +88,7 @@ import { environment } from '../../../../environments/environment';
           </div>
           <div>
             <label class="lb">Tugma havolasi</label>
-            <input class="in" [(ngModel)]="buttonUrl" placeholder="https://..." />
+            <input class="in" [(ngModel)]="buttonUrl" placeholder="https://..." [readonly]="!!target" />
           </div>
         </div>
 
@@ -75,7 +118,22 @@ import { environment } from '../../../../environments/environment';
     .form { background: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 14px; }
     .lb { display: block; font-size: 0.68rem; color: #a1a1aa; font-weight: 800; margin: 10px 0 5px; text-transform: uppercase; }
     .in { width: 100%; box-sizing: border-box; background: #0f0f0f; border: 1px solid #3f3f46; border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 0.85rem; outline: none; font-family: inherit; }
+    .in[readonly] { color: #a1a1aa; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .srch { display: flex; gap: 8px; }
+    .b-sm { flex: 0 0 auto; border: none; border-radius: 10px; padding: 0 14px; background: #27272a; color: #fff; font-weight: 800; font-size: 0.75rem; cursor: pointer; }
+    .b-sm:disabled { opacity: 0.5; }
+    .res { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+    .res-i { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 10px; border: 1px solid #27272a; background: #0f0f0f; color: #fff; text-align: left; cursor: pointer; }
+    .res-i img { width: 32px; height: 46px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+    .res-t { flex: 1; min-width: 0; font-size: 0.8rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .res-k { font-size: 0.65rem; color: #a1a1aa; flex: 0 0 auto; }
+    .target { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; border: 1px solid rgba(220,38,38,0.5); background: rgba(69,10,10,0.35); }
+    .target img { width: 40px; height: 58px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+    .target-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .target-info b { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .target-info span { font-size: 0.68rem; color: #fca5a5; }
+    .x { border: none; background: rgba(255,255,255,0.06); border-radius: 50%; padding: 6px; display: flex; cursor: pointer; }
     .drop { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin-bottom: 6px; border: 2px dashed #3f3f46; border-radius: 10px; background: #09090b; color: #d4d4d8; font-size: 0.75rem; cursor: pointer; }
     .prev { display: block; width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-top: 4px; }
     .b { width: 100%; margin-top: 14px; border: none; border-radius: 12px; padding: 13px; font-size: 0.85rem; font-weight: 800; cursor: pointer; color: #fff; }
@@ -97,10 +155,23 @@ export class AdminBroadcastComponent {
   okMsg = '';
   error = '';
 
+  /** Kontentga yo'naltirish */
+  search = '';
+  searching = false;
+  results: Content[] = [];
+  target: Content | null = null;
+  targetEpisodes: Episode[] = [];
+  targetEpId = '';
+  private autoImage = false;
+
   private readonly origin = environment.apiUrl.replace(/\/api\/v1\/?$/, '');
+  private readonly webOrigin = window.location.origin;
+  private readonly defaultButton = 'Veb appka kirish';
+  private readonly watchButton = "Ko'rish";
 
   constructor(
     private readonly api: AdminApiService,
+    private readonly pub: ApiService,
     private readonly http: HttpClient,
     private readonly dlg: DialogService,
   ) {}
@@ -109,10 +180,104 @@ export class AdminBroadcastComponent {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  private abs(u: string | null | undefined): string {
+    if (!u) { return ''; }
+    if (/^https?:\/\//i.test(u)) { return u; }
+    return this.origin + (u.charAt(0) === '/' ? u : '/' + u);
+  }
+
+  posterOf(c: Content | null): string {
+    return c ? this.abs(c.posterUrl) : '';
+  }
+
+  typeLabel(t: string | undefined): string {
+    switch (t) {
+      case 'movie': return 'Kino';
+      case 'series': return 'Serial';
+      case 'short_drama': return 'Mini drama';
+      case 'anime': return 'Anime';
+      case 'cartoon': return 'Multfilm';
+      default: return t || 'Kontent';
+    }
+  }
+
   private audienceLabel(): string {
     if (this.audience === 'vip') { return 'faqat VIP obunachilarga'; }
     if (this.audience === 'free') { return 'faqat bepul foydalanuvchilarga'; }
     return 'barcha foydalanuvchilarga';
+  }
+
+  findContent(): void {
+    const q = this.search.trim();
+    if (q.length < 2) { this.error = 'Kamida 2 ta harf yozing.'; return; }
+    this.searching = true;
+    this.error = '';
+    this.pub.getContent({ search: q, limit: 15 }).subscribe({
+      next: (r) => {
+        this.searching = false;
+        const raw: unknown = r;
+        let list: unknown[] = [];
+        if (Array.isArray(raw)) {
+          list = raw;
+        } else if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)) {
+          list = (raw as { data: unknown[] }).data;
+        }
+        this.results = list as Content[];
+        if (!this.results.length) { this.error = 'Hech narsa topilmadi.'; }
+      },
+      error: () => { this.searching = false; this.error = 'Qidiruvda xato yuz berdi.'; },
+    });
+  }
+
+  chooseContent(c: Content): void {
+    this.target = c;
+    this.results = [];
+    this.targetEpId = '';
+    this.targetEpisodes = [];
+    this.error = '';
+    this.applyTarget();
+    this.pub.getContentById(c.id).subscribe({
+      next: (r: unknown) => {
+        let full: Content | null = null;
+        if (r && typeof r === 'object') {
+          const o = r as { data?: Content };
+          full = (o.data && typeof o.data === 'object' ? o.data : (r as Content));
+        }
+        if (full && full.id) { this.target = full; }
+        const eps: Episode[] = (full && Array.isArray(full.episodes)) ? full.episodes : [];
+        this.targetEpisodes = eps.slice().sort((a, b) => {
+          const s = (a.seasonNumber || 1) - (b.seasonNumber || 1);
+          return s !== 0 ? s : (a.episodeNumber || 0) - (b.episodeNumber || 0);
+        });
+        this.applyTarget();
+      },
+      error: () => { this.applyTarget(); },
+    });
+  }
+
+  /** Tanlangan kontent/qism bo'yicha tugma havolasi va rasmni tayyorlaydi. */
+  applyTarget(): void {
+    if (!this.target) { return; }
+    let url = this.webOrigin + '/?open=' + encodeURIComponent(this.target.id);
+    if (this.targetEpId) { url += '&ep=' + encodeURIComponent(this.targetEpId); }
+    this.buttonUrl = url;
+    if (!this.buttonText.trim() || this.buttonText === this.defaultButton) {
+      this.buttonText = this.watchButton;
+    }
+    const poster = this.posterOf(this.target);
+    if (poster && (!this.imageUrl || this.autoImage)) {
+      this.imageUrl = poster;
+      this.autoImage = true;
+    }
+  }
+
+  clearTarget(): void {
+    this.target = null;
+    this.targetEpisodes = [];
+    this.targetEpId = '';
+    this.buttonUrl = this.webOrigin;
+    if (this.buttonText === this.watchButton) { this.buttonText = this.defaultButton; }
+    if (this.autoImage) { this.imageUrl = ''; this.autoImage = false; }
   }
 
   onImage(ev: Event): void {
@@ -123,11 +288,12 @@ export class AdminBroadcastComponent {
     fd.append('poster', file);
     this.uploading = true;
     this.error = '';
-    this.http.post<any>(environment.apiUrl + '/upload/poster', fd).subscribe({
-      next: (r: any) => {
+    this.http.post<{ url?: string }>(environment.apiUrl + '/upload/poster', fd).subscribe({
+      next: (r) => {
         this.uploading = false;
         const u: string = (r && r.url) || '';
         this.imageUrl = u.charAt(0) === '/' ? this.origin + u : u;
+        this.autoImage = false;
       },
       error: () => { this.uploading = false; this.error = 'Rasm yuklanmadi'; },
     });
@@ -143,23 +309,25 @@ export class AdminBroadcastComponent {
       if (!ok) { return; }
       const head = this.title.trim();
       const message = (head ? '<b>' + this.esc(head) + '</b>\n\n' : '') + this.esc(body);
-      const payload: any = { text: message, audience: this.audience };
-      if (this.imageUrl.trim()) { payload.photoUrl = this.imageUrl.trim(); }
+      const payload: Record<string, unknown> = { text: message, audience: this.audience };
+      if (this.imageUrl.trim()) { payload['photoUrl'] = this.imageUrl.trim(); }
       if (this.buttonText.trim() && btnUrl) {
-        payload.buttonText = this.buttonText.trim();
-        payload.buttonUrl = btnUrl;
+        payload['buttonText'] = this.buttonText.trim();
+        payload['buttonUrl'] = btnUrl;
       }
       this.sending = true;
       this.okMsg = '';
       this.error = '';
       this.api.broadcast(payload).subscribe({
-        next: (r: any) => {
+        next: (r: BroadcastResult | null) => {
           this.sending = false;
           if (r && r.ok === false) { this.error = r.error || 'Yuborilmadi'; return; }
           this.okMsg = 'Xabar yuborilmoqda (' + ((r && r.total) || 0) + ' foydalanuvchi). Bir necha daqiqa oladi.';
           this.title = '';
           this.text = '';
           this.imageUrl = '';
+          this.autoImage = false;
+          this.clearTarget();
         },
         error: () => { this.sending = false; this.error = 'Yuborilmadi. Server javob bermadi.'; },
       });
