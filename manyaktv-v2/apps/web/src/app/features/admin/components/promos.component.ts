@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { PromoCode, PromoCodeCreate } from '../../../core/models/admin.models';
 
 /** v1 AdminPanel -> "Promokodlar" bolimi. */
 @Component({
@@ -60,8 +61,8 @@ import { DialogService } from '../../../core/services/dialog.service';
   `],
 })
 export class AdminPromosComponent implements OnInit {
-  promos: any[] = [];
-  draft: any = { code: '', discountPercent: 10, maxUses: 100 };
+  promos: PromoCode[] = [];
+  draft: PromoCodeCreate = AdminPromosComponent.emptyDraft();
   loading = false;
   saving = false;
   error = '';
@@ -69,14 +70,18 @@ export class AdminPromosComponent implements OnInit {
 
   constructor(private readonly api: AdminApiService, private readonly dlg: DialogService) {}
 
+  private static emptyDraft(): PromoCodeCreate {
+    return { code: '', discountPercent: 10, maxUses: 100 };
+  }
+
   ngOnInit(): void { this.load(); }
 
   load(): void {
     this.loading = true;
     this.api.getPromos().subscribe({
-      next: (r: any) => {
+      next: (list: PromoCode[]) => {
         this.loading = false;
-        this.promos = Array.isArray(r) ? r : (r && r.data) || [];
+        this.promos = list;
       },
       error: () => { this.loading = false; this.error = 'Promokodlarni yuklab bolmadi.'; },
     });
@@ -89,24 +94,25 @@ export class AdminPromosComponent implements OnInit {
     this.okMsg = '';
     if (!/^[A-Z0-9_-]{3,32}$/.test(code)) { this.error = 'Kod 3-32 ta lotin harf yoki raqamdan iborat bolsin.'; return; }
     if (pct <= 0 || pct > 100) { this.error = 'Chegirma 1 dan 100 gacha bolishi kerak.'; return; }
+    const body: PromoCodeCreate = {
+      code,
+      discountPercent: Math.round(pct),
+      maxUses: Math.max(0, Math.round(Number(this.draft.maxUses) || 0)),
+    };
     this.saving = true;
-    this.api.createPromo({
-      code: code,
-      discountPercent: pct,
-      maxUses: Math.max(0, Number(this.draft.maxUses) || 0),
-    }).subscribe({
+    this.api.createPromo(body).subscribe({
       next: () => {
         this.saving = false;
         this.okMsg = 'Promokod yaratildi.';
-        this.draft = { code: '', discountPercent: 10, maxUses: 100 };
+        this.draft = AdminPromosComponent.emptyDraft();
         this.load();
       },
       error: () => { this.saving = false; this.error = 'Yaratilmadi.'; },
     });
   }
 
-  del(p: any): void {
-    if (!p || !p.id) { return; }
+  del(p: PromoCode): void {
+    if (!p.id) { return; }
     this.dlg.confirm(p.code + ' promokodi ochirilsinmi?', { title: 'Promokodni ochirish', okText: 'Ochirish', danger: true }).then((ok) => {
       if (!ok) { return; }
       this.error = '';

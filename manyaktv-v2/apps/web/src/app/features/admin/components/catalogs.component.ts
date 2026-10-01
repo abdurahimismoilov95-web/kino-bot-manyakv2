@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Catalog } from '../../../core/models/admin.models';
 
 /** v1 AdminPanel -> "Ekran Kataloglari" bolimi. */
 @Component({
@@ -74,7 +75,7 @@ import { DialogService } from '../../../core/services/dialog.service';
   `],
 })
 export class AdminCatalogsComponent implements OnInit {
-  catalogs: any[] = [];
+  catalogs: Catalog[] = [];
   loading = false;
   saving = false;
   error = '';
@@ -85,10 +86,14 @@ export class AdminCatalogsComponent implements OnInit {
   ngOnInit(): void {
     this.loading = true;
     this.api.getCatalogs().subscribe({
-      next: (r: any) => {
+      next: (list: Catalog[]) => {
         this.loading = false;
-        const list = Array.isArray(r) ? r : (r && r.catalogs) || [];
-        this.catalogs = list;
+        this.catalogs = list.map((c, idx) => ({
+          id: String(c.id || ''),
+          title: String(c.title || ''),
+          isVisible: c.isVisible !== false,
+          order: typeof c.order === 'number' ? c.order : idx,
+        }));
       },
       error: () => {
         this.loading = false;
@@ -119,11 +124,23 @@ export class AdminCatalogsComponent implements OnInit {
   }
 
   save(): void {
-    this.saving = true;
     this.okMsg = '';
     this.error = '';
-    this.catalogs.forEach((c: any, idx: number) => { c.order = idx; });
-    this.api.saveCatalogs(this.catalogs).subscribe({
+    const ids = new Set<string>();
+    for (const c of this.catalogs) {
+      const id = String(c.id || '').trim();
+      if (!c.title.trim() || !id) { this.error = 'Har bir katalogning nomi va ID si bolishi kerak.'; return; }
+      if (ids.has(id)) { this.error = 'Bir xil ID li kataloglar bor: ' + id; return; }
+      ids.add(id);
+    }
+    const body: Catalog[] = this.catalogs.map((c, idx) => ({
+      id: c.id.trim(),
+      title: c.title.trim(),
+      isVisible: !!c.isVisible,
+      order: idx,
+    }));
+    this.saving = true;
+    this.api.saveCatalogs(body).subscribe({
       next: () => { this.saving = false; this.okMsg = 'Saqlandi.'; },
       error: () => { this.saving = false; this.error = 'Saqlanmadi.'; },
     });

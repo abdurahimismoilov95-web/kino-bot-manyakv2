@@ -1,11 +1,22 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
+import {
+  AppSettings,
+  AuditLog,
+  Catalog,
+  ListResponse,
+  Plan,
+  PromoCode,
+  PromoCodeCreate,
+  toList,
+} from '../../../core/models/admin.models';
 
 /**
  * manyak-tv1 AdminPanel.tsx dagi barcha bolimlar uchun umumiy admin API.
- * ApiService da mavjud bolmagan endpointlar shu yerda.
+ * Ro'yxat javoblari shu yerda massivga keltiriladi, komponentlar tayyor tipli massiv oladi.
  */
 @Injectable({ providedIn: 'root' })
 export class AdminApiService {
@@ -14,73 +25,80 @@ export class AdminApiService {
   constructor(private readonly http: HttpClient) {}
 
   // Kataloglar (ekran bolimlari)
-  getCatalogs(): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/catalogs');
+  getCatalogs(): Observable<Catalog[]> {
+    return this.http.get<ListResponse<Catalog>>(this.base + '/admin/catalogs').pipe(map((r) => toList(r)));
   }
-  saveCatalogs(catalogs: any[]): Observable<any> {
-    return this.http.put<any>(this.base + '/admin/catalogs', { catalogs });
+  saveCatalogs(catalogs: Catalog[]): Observable<unknown> {
+    return this.http.put<unknown>(this.base + '/admin/catalogs', { catalogs });
   }
 
   // Tariflar
-  getPlans(): Observable<any> {
-    return this.http.get<any>(this.base + '/plans');
+  getPlans(): Observable<Plan[]> {
+    return this.http.get<ListResponse<Plan>>(this.base + '/plans').pipe(map((r) => toList(r)));
   }
-  savePlan(plan: any): Observable<any> {
-    if (plan && plan.id) {
-      return this.http.patch<any>(this.base + '/admin/plans/' + plan.id, plan);
+  savePlan(plan: Plan): Observable<Plan> {
+    if (plan.id) {
+      return this.http.patch<Plan>(this.base + '/admin/plans/' + encodeURIComponent(plan.id), plan);
     }
-    return this.http.post<any>(this.base + '/admin/plans', plan);
+    return this.http.post<Plan>(this.base + '/admin/plans', plan);
   }
-  deletePlan(id: string): Observable<any> {
-    return this.http.delete<any>(this.base + '/admin/plans/' + id);
+  deletePlan(id: string): Observable<unknown> {
+    return this.http.delete<unknown>(this.base + '/admin/plans/' + encodeURIComponent(id));
   }
 
   // Promokodlar
-  getPromos(): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/promo-codes');
+  getPromos(): Observable<PromoCode[]> {
+    return this.http.get<ListResponse<PromoCode>>(this.base + '/admin/promo-codes').pipe(map((r) => toList(r)));
   }
-  createPromo(body: any): Observable<any> {
-    return this.http.post<any>(this.base + '/admin/promo-codes', body);
+  createPromo(body: PromoCodeCreate): Observable<PromoCode> {
+    return this.http.post<PromoCode>(this.base + '/admin/promo-codes', body);
   }
-  deletePromo(id: string): Observable<any> {
-    return this.http.delete<any>(this.base + '/admin/promo-codes/' + id);
+  deletePromo(id: string): Observable<unknown> {
+    return this.http.delete<unknown>(this.base + '/admin/promo-codes/' + encodeURIComponent(id));
   }
 
-  // Xabar yuborish
-  broadcast(body: any): Observable<any> {
-    return this.http.post<any>(this.base + '/admin/broadcast', body);
+  // Xabar yuborish (broadcast komponenti keyingi bosqichda tiplanadi)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  broadcast(body: Record<string, unknown>): Observable<any> {
+    return this.http.post(this.base + '/admin/broadcast', body);
   }
 
   // Bot va havolalar sozlamalari
-  getSettings(): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/settings');
+  getSettings(): Observable<Partial<AppSettings> | null> {
+    return this.http.get<Partial<AppSettings> | null>(this.base + '/admin/settings');
   }
-  saveSettings(body: any): Observable<any> {
-    return this.http.put<any>(this.base + '/admin/settings', body);
+  saveSettings(body: AppSettings): Observable<unknown> {
+    return this.http.put<unknown>(this.base + '/admin/settings', body);
   }
 
   // Audit jurnali
-  getAuditLogs(): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/audit-logs');
+  getAuditLogs(): Observable<AuditLog[]> {
+    return this.http.get<ListResponse<AuditLog>>(this.base + '/admin/audit-logs').pipe(map((r) => toList(r)));
   }
 
-  // Adminlar (faqat bosh admin)
+  // Adminlar (faqat bosh admin) - admins komponenti keyingi bosqichda tiplanadi
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getAdmins(): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/admins');
+    return this.http.get(this.base + '/admin/admins');
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addAdmin(telegramId: string): Observable<any> {
-    return this.http.post<any>(this.base + '/admin/admins', { telegramId });
+    return this.http.post(this.base + '/admin/admins', { telegramId });
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   removeAdmin(id: string): Observable<any> {
-    return this.http.delete<any>(this.base + '/admin/admins/' + id);
+    return this.http.delete(this.base + '/admin/admins/' + encodeURIComponent(id));
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getAdminLogs(id: string): Observable<any> {
-    return this.http.get<any>(this.base + '/admin/admins/' + id + '/logs');
+    return this.http.get(this.base + '/admin/admins/' + encodeURIComponent(id) + '/logs');
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   blockAdmin(id: string, reason: string): Observable<any> {
-    return this.http.post<any>(this.base + '/admin/admins/' + id + '/block', { reason });
+    return this.http.post(this.base + '/admin/admins/' + encodeURIComponent(id) + '/block', { reason });
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   unblockAdmin(id: string): Observable<any> {
-    return this.http.post<any>(this.base + '/admin/admins/' + id + '/unblock', {});
+    return this.http.post(this.base + '/admin/admins/' + encodeURIComponent(id) + '/unblock', {});
   }
 }

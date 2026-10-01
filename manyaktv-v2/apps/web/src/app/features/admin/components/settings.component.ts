@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
+import { AppSettings } from '../../../core/models/admin.models';
 
 /** v1 AdminPanel -> "Bot & Havolalar" bolimi. */
 @Component({
@@ -56,7 +57,7 @@ import { AdminApiService } from './admin-api.service';
   `],
 })
 export class AdminSettingsComponent implements OnInit {
-  s: any = {
+  s: AppSettings = {
     botUsername: 'Manyaktvbot',
     channelUrl: '',
     adminContactUrl: '',
@@ -74,20 +75,42 @@ export class AdminSettingsComponent implements OnInit {
   ngOnInit(): void {
     this.loading = true;
     this.api.getSettings().subscribe({
-      next: (r: any) => {
+      next: (r: Partial<AppSettings> | null) => {
         this.loading = false;
-        if (r) { this.s = Object.assign({}, this.s, r); }
+        if (r) { this.s = { ...this.s, ...r }; }
       },
       error: () => { this.loading = false; this.error = 'Sozlamalarni yuklab bolmadi.'; },
     });
   }
 
+  private static isHttpsOrEmpty(v: string): boolean {
+    return !v || /^https:\/\/[^\s]+$/i.test(v);
+  }
+
   save(): void {
-    this.saving = true;
     this.okMsg = '';
     this.error = '';
-    this.api.saveSettings(this.s).subscribe({
-      next: () => { this.saving = false; this.okMsg = 'Saqlandi.'; },
+    const body: AppSettings = {
+      botUsername: String(this.s.botUsername || '').trim().replace(/^@/, ''),
+      channelUrl: String(this.s.channelUrl || '').trim(),
+      adminContactUrl: String(this.s.adminContactUrl || '').trim(),
+      webAppUrl: String(this.s.webAppUrl || '').trim(),
+      cardNumber: String(this.s.cardNumber || '').replace(/[^0-9 ]/g, '').trim(),
+      cardHolder: String(this.s.cardHolder || '').trim(),
+    };
+    if (body.botUsername && !/^[A-Za-z0-9_]{5,32}$/.test(body.botUsername)) {
+      this.error = 'Bot username notogri.';
+      return;
+    }
+    if (!AdminSettingsComponent.isHttpsOrEmpty(body.channelUrl)
+      || !AdminSettingsComponent.isHttpsOrEmpty(body.adminContactUrl)
+      || !AdminSettingsComponent.isHttpsOrEmpty(body.webAppUrl)) {
+      this.error = 'Havolalar https:// bilan boshlanishi kerak.';
+      return;
+    }
+    this.saving = true;
+    this.api.saveSettings(body).subscribe({
+      next: () => { this.saving = false; this.s = body; this.okMsg = 'Saqlandi.'; },
       error: () => { this.saving = false; this.error = 'Saqlanmadi.'; },
     });
   }

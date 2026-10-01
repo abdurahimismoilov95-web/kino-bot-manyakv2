@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
+import { AuditLog } from '../../../core/models/admin.models';
 
 /** v1 AdminPanel -> "Audit Jurnali" bolimi. */
 @Component({
@@ -17,7 +18,7 @@ import { AdminApiService } from './admin-api.service';
           <span class="l-act">{{ l.action || l.type }}</span>
           <span class="l-time">{{ when(l.createdAt || l.timestamp) }}</span>
         </div>
-        <p class="l-by">{{ l.actorName || l.adminName || ('ID ' + (l.actorId || l.adminId || '?')) }}</p>
+        <p class="l-by">{{ actor(l) }}</p>
         <p class="l-desc" *ngIf="l.description || l.details">{{ l.description || l.details }}</p>
       </div>
 
@@ -39,7 +40,7 @@ import { AdminApiService } from './admin-api.service';
   `],
 })
 export class AdminAuditComponent implements OnInit {
-  logs: any[] = [];
+  logs: AuditLog[] = [];
   loading = false;
   error = '';
 
@@ -48,18 +49,23 @@ export class AdminAuditComponent implements OnInit {
   ngOnInit(): void {
     this.loading = true;
     this.api.getAuditLogs().subscribe({
-      next: (r: any) => {
+      next: (list: AuditLog[]) => {
         this.loading = false;
-        this.logs = Array.isArray(r) ? r : (r && r.data) || [];
+        this.logs = list;
       },
       error: () => { this.loading = false; this.error = 'Jurnalni yuklab bolmadi.'; },
     });
   }
 
-  when(v: any): string {
+  actor(l: AuditLog): string {
+    return l.actorName || l.adminName || ('ID ' + (l.actorId || l.adminId || '?'));
+  }
+
+  when(v: string | null | undefined): string {
     if (!v) { return ''; }
     const d = new Date(v);
-    const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+    if (isNaN(d.getTime())) { return ''; }
+    const pad = (n: number): string => (n < 10 ? '0' + n : '' + n);
     return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
 }

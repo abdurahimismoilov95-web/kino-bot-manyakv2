@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { MoneyValue, Plan } from '../../../core/models/admin.models';
 
 /** v1 AdminPanel -> "Tariflar" bolimi. */
 @Component({
@@ -75,8 +76,8 @@ import { DialogService } from '../../../core/services/dialog.service';
   `],
 })
 export class AdminPlansComponent implements OnInit {
-  plans: any[] = [];
-  draft: any = null;
+  plans: Plan[] = [];
+  draft: Plan | null = null;
   loading = false;
   saving = false;
   error = '';
@@ -89,16 +90,17 @@ export class AdminPlansComponent implements OnInit {
   load(): void {
     this.loading = true;
     this.api.getPlans().subscribe({
-      next: (r: any) => {
+      next: (list: Plan[]) => {
         this.loading = false;
-        this.plans = Array.isArray(r) ? r : (r && r.data) || [];
+        this.plans = list;
       },
       error: () => { this.loading = false; this.error = 'Tariflarni yuklab bolmadi.'; },
     });
   }
 
-  money(v: any): string {
-    try { return Number(v || 0).toLocaleString('ru-RU'); } catch { return String(v || 0); }
+  money(v: MoneyValue): string {
+    const n = Number(v || 0);
+    return Number.isFinite(n) ? n.toLocaleString('ru-RU') : '0';
   }
 
   newPlan(): void {
@@ -107,34 +109,45 @@ export class AdminPlansComponent implements OnInit {
     this.draft = { name: '', price: 0, durationDays: 30, description: '' };
   }
 
-  edit(p: any): void {
+  edit(p: Plan): void {
     this.error = '';
     this.okMsg = '';
-    this.draft = Object.assign({}, p);
+    this.draft = { ...p, name: p.name || p.title || '', durationDays: p.durationDays || p.days || 30 };
   }
 
   save(): void {
-    if (!this.draft) { return; }
-    const name = String(this.draft.name || '').trim();
+    const d = this.draft;
+    if (!d) { return; }
+    const name = String(d.name || '').trim();
+    const price = Number(d.price);
+    const days = Number(d.durationDays);
     if (!name) { this.error = 'Tarif nomini kiriting.'; return; }
-    if (!(Number(this.draft.price) > 0)) { this.error = 'Narxni togri kiriting.'; return; }
-    if (!(Number(this.draft.durationDays) > 0)) { this.error = 'Muddatni (kun) togri kiriting.'; return; }
+    if (!(price > 0)) { this.error = 'Narxni togri kiriting.'; return; }
+    if (!(days > 0)) { this.error = 'Muddatni (kun) togri kiriting.'; return; }
+    const body: Plan = {
+      name,
+      price,
+      durationDays: Math.round(days),
+      description: String(d.description || '').trim(),
+    };
+    if (d.id) { body.id = d.id; }
     this.saving = true;
     this.okMsg = '';
     this.error = '';
-    this.api.savePlan(this.draft).subscribe({
+    this.api.savePlan(body).subscribe({
       next: () => { this.saving = false; this.draft = null; this.okMsg = 'Saqlandi.'; this.load(); },
       error: () => { this.saving = false; this.error = 'Saqlanmadi.'; },
     });
   }
 
-  del(p: any): void {
-    if (!p || !p.id) { return; }
+  del(p: Plan): void {
+    const id = p.id;
+    if (!id) { return; }
     const name = p.name || p.title || 'Tarif';
     this.dlg.confirm('"' + name + '" tarifi ochirilsinmi?', { title: 'Tarifni ochirish', okText: 'Ochirish', danger: true }).then((ok) => {
       if (!ok) { return; }
       this.error = '';
-      this.api.deletePlan(String(p.id)).subscribe({
+      this.api.deletePlan(String(id)).subscribe({
         next: () => { this.okMsg = 'Ochirildi.'; this.load(); },
         error: () => { this.error = 'Ochirilmadi.'; },
       });
