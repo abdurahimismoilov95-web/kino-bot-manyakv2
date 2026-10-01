@@ -22,7 +22,10 @@ import { environment } from '../../../../environments/environment';
         </div>
 
         <div class="panel">
-          <h3>&#128176; {{ d.year }}-yil oylar boyicha daromad</h3>
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
+            <span>{{ d.year }}-yil oylar boyicha daromad</span>
+          </h3>
           <div class="split">
             <span>VIP: <b class="a">{{ d.revenue.vipYear | number }}</b> som ({{ d.vip.soldYear }} ta)</span>
             <span>Kino: <b class="g">{{ d.revenue.singleYear | number }}</b> som</span>
@@ -37,7 +40,10 @@ import { environment } from '../../../../environments/environment';
         </div>
 
         <div class="panel">
-          <h3>&#128200; Har bir kino/drama daromadi</h3>
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+            <span>Har bir kino/drama daromadi</span>
+          </h3>
           <div class="tbl-wrap">
             <table>
               <thead>
@@ -64,7 +70,10 @@ import { environment } from '../../../../environments/environment';
         </div>
 
         <div class="panel">
-          <h3>&#9881; Server holati</h3>
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+            <span>Server holati</span>
+          </h3>
           <div class="srv">
             <div class="srv-i"><span>Holat</span><b [class.g]="d.server.ok" [class.r]="!d.server.ok">{{ d.server.ok ? 'Ishlayapti' : 'Baza xatosi' }}</b></div>
             <div class="srv-i"><span>Baza javobi</span><b>{{ d.server.dbMs }} ms</b></div>
@@ -74,7 +83,10 @@ import { environment } from '../../../../environments/environment';
             <div class="srv-i"><span>Node</span><b>{{ d.server.nodeVersion }}</b></div>
             <div class="srv-i"><span>Muhit</span><b>{{ d.server.env }}</b></div>
           </div>
-          <button class="ref" (click)="load()">&#9851; Yangilash</button>
+          <button class="ref" (click)="load()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            <span>Yangilash</span>
+          </button>
         </div>
       </ng-container>
     </div>
@@ -94,7 +106,8 @@ import { environment } from '../../../../environments/environment';
     .a { color: #fbbf24; }
     .r { color: #f87171; }
     .panel { background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 14px; margin-bottom: 14px; }
-    .panel h3 { margin: 0 0 10px; font-size: 14px; font-weight: 800; color: #fff; }
+    .panel h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; font-weight: 800; color: #fff; }
+    .panel h3 svg { flex: 0 0 auto; }
     .split { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #a1a1aa; margin-bottom: 12px; }
     .split b { font-weight: 800; }
     .bars { display: flex; align-items: flex-end; gap: 4px; height: 170px; }
@@ -119,7 +132,7 @@ import { environment } from '../../../../environments/environment';
     .srv-i { background: #09090b; border: 1px solid #27272a; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 3px; }
     .srv-i span { font-size: 10px; color: #71717a; }
     .srv-i b { font-size: 13px; color: #fff; }
-    .ref { margin-top: 10px; background: #27272a; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; }
+    .ref { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; background: #27272a; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
   `],
 })
 export class AdminStatsComponent implements OnInit {
