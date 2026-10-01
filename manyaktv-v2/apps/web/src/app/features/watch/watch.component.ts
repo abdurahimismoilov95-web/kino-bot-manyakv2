@@ -107,7 +107,7 @@ import { environment } from '../../../environments/environment';
             <div class="pl-right">
               <div class="pl-q">
                 <button class="pl-chip" (click)="qMenu = !qMenu; $event.stopPropagation()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d4d4d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d4d4d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.830l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                   <span>{{ selectedQ === 'Auto' ? ('Auto (' + autoQ + ')') : selectedQ }}</span>
                 </button>
                 <div class="pl-qm" *ngIf="qMenu">
@@ -382,7 +382,9 @@ export class WatchComponent implements OnInit, OnDestroy {
         } else {
           this.activeEp = null;
           this.startAt = Number(this.content.watchProgress || 0);
-          if (this.canWatch(null)) { this.load(); } else { this.lockNow(); }
+          /* Ruxsatni server hal qiladi (VIP, bitta sotib olish, bepul) */
+          this.locked = false;
+          this.load();
         }
       },
       error: () => { this.buffering = false; this.errorText = 'Kontent yuklanmadi.'; },
@@ -400,7 +402,7 @@ export class WatchComponent implements OnInit, OnDestroy {
     if (this.noticeTimer) { clearTimeout(this.noticeTimer); }
   }
 
-  /** v1 checkHasAccess mantig'i */
+  /** Faqat ko'rinish uchun (qism belgilari). Haqiqiy ruxsatni server beradi. */
   canWatch(ep: any): boolean {
     if (!this.content) { return false; }
     if (this.isAdmin) { return true; }
@@ -449,10 +451,6 @@ export class WatchComponent implements OnInit, OnDestroy {
     this.activeEp = ep;
     this.startAt = Number(ep.watchProgress || 0);
     this.errorText = '';
-    if (!this.canWatch(ep)) {
-      this.lockNow();
-      return;
-    }
     this.locked = false;
     this.load();
   }
@@ -520,6 +518,10 @@ export class WatchComponent implements OnInit, OnDestroy {
     return this.abs(raw);
   }
 
+  /**
+   * Har doim serverdan so'raymiz: server VIP, bitta sotib olish va bepul qismni tekshiradi.
+   * Ruxsat bo'lsa HLS yoki to'g'ridan-to'g'ri manzil qaytadi, bo'lmasa 403 - qulf oynasi.
+   */
   private load(): void {
     this.destroyHls();
     this.errorText = '';
@@ -527,25 +529,28 @@ export class WatchComponent implements OnInit, OnDestroy {
     this.currentTime = 0;
     this.duration = 0;
 
-    const direct = this.directUrl();
-    const src: any = this.activeEp || this.content;
-    const hlsReady = !!(src && src.hlsPath);
+    const ep: any = this.activeEp;
+    const local = this.directUrl();
 
-    if (direct && !hlsReady) { this.playDirect(direct); return; }
-
-    const req: any = this.activeEp
-      ? this.api.getEpisodeStreamUrl(this.content.id, this.activeEp.id)
+    const req: any = ep
+      ? this.api.getEpisodeStreamUrl(this.content.id, ep.id)
       : this.api.getStreamUrl(this.content.id);
     req.subscribe({
       next: (s: any) => {
+        if (ep !== this.activeEp) { return; }
+        this.locked = false;
+        if (!(ep && ep.isFree)) { this.content.hasAccess = true; }
+        const direct = this.abs(s && s.directUrl) || local;
         if (s && s.masterPlaylist) { this.playHls(s.masterPlaylist, direct); }
         else if (direct) { this.playDirect(direct); }
         else { this.fail('Video manzili topilmadi.'); }
       },
       error: (e: any) => {
+        if (ep !== this.activeEp) { return; }
         /* Server "obuna kerak" dedi: sotib olish oynasini ko'rsatamiz */
         if (e && e.status === 403) { this.lockNow(); return; }
-        if (direct) { this.playDirect(direct); }
+        if (e && e.status === 401) { this.fail('Avval tizimga kiring.'); return; }
+        if (local && this.canWatch(ep)) { this.playDirect(local); }
         else { this.fail('Video ochilmadi. Keyinroq qayta urinib koring.'); }
       },
     });
@@ -726,7 +731,7 @@ export class WatchComponent implements OnInit, OnDestroy {
   }
 
   /** Nisbiy fayl manzillarini API origin bilan to'ldirish */
-  private abs(u: string): string {
+  private abs(u: string | null | undefined): string {
     if (!u) { return ''; }
     if (/^https?:\/\//i.test(u)) { return u; }
     const origin = String(environment.apiUrl || '').replace(/\/api\/v1\/?$/, '');
