@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { AdminApiService } from './admin-api.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 /** v1 AdminPanel -> "Promokodlar" bolimi. */
 @Component({
@@ -11,7 +12,7 @@ import { AdminApiService } from './admin-api.service';
       <div class="form">
         <input class="in" [(ngModel)]="draft.code" [ngModelOptions]="{ standalone: true }" placeholder="KOD (MANYAK10)" />
         <input class="in" type="number" [(ngModel)]="draft.discountPercent" [ngModelOptions]="{ standalone: true }" placeholder="Chegirma %" />
-        <input class="in" type="number" [(ngModel)]="draft.maxUses" [ngModelOptions]="{ standalone: true }" placeholder="Maksimal foydalanish" />
+        <input class="in" type="number" [(ngModel)]="draft.maxUses" [ngModelOptions]="{ standalone: true }" placeholder="Maksimal foydalanish (0 = cheksiz)" />
         <button class="b b-red wide" [disabled]="saving" (click)="create()">
           {{ saving ? 'Yaratilmoqda...' : 'Promokod yaratish' }}
         </button>
@@ -27,10 +28,12 @@ import { AdminApiService } from './admin-api.service';
             <p class="c-code">{{ p.code }}</p>
             <p class="c-s">
               {{ p.discountPercent || p.discount }}% &middot;
-              {{ p.usedCount || 0 }}/{{ p.maxUses || '&#8734;' }} ishlatilgan
+              {{ p.usedCount || 0 }}/{{ p.maxUses ? p.maxUses : 'cheksiz' }} ishlatilgan
             </p>
           </div>
-          <button class="b b-d" (click)="del(p)">&#10005;</button>
+          <button class="b b-d ic" title="O'chirish" (click)="del(p)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
         </div>
       </div>
 
@@ -41,11 +44,12 @@ import { AdminApiService } from './admin-api.service';
     .ap { padding: 16px; color: #fff; }
     h2 { font-size: 1rem; font-weight: 800; margin: 0 0 12px; }
     .form, .card { background: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 13px; margin-bottom: 10px; }
-    .in { width: 100%; background: #0f0f0f; border: 1px solid #3f3f46; border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 0.82rem; outline: none; margin-bottom: 8px; }
+    .in { display: block; width: 100%; box-sizing: border-box; background: #0f0f0f; border: 1px solid #3f3f46; border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 0.82rem; outline: none; margin-bottom: 8px; }
     .c-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .c-code { font-size: 0.9rem; font-weight: 900; margin: 0; font-family: monospace; color: #fbbf24; letter-spacing: 0.06em; }
     .c-s { font-size: 0.72rem; color: #a1a1aa; margin: 4px 0 0; }
-    .b { border: none; border-radius: 10px; padding: 9px 13px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+    .b { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: none; border-radius: 10px; padding: 9px 13px; font-size: 0.75rem; font-weight: 700; cursor: pointer; line-height: 1; }
+    .b.ic { width: 34px; height: 34px; padding: 0; flex: 0 0 auto; }
     .b-red { background: #dc2626; color: #fff; }
     .b-d { background: #450a0a; color: #f87171; }
     .wide { width: 100%; padding: 12px; }
@@ -63,7 +67,7 @@ export class AdminPromosComponent implements OnInit {
   error = '';
   okMsg = '';
 
-  constructor(private readonly api: AdminApiService) {}
+  constructor(private readonly api: AdminApiService, private readonly dlg: DialogService) {}
 
   ngOnInit(): void { this.load(); }
 
@@ -80,14 +84,16 @@ export class AdminPromosComponent implements OnInit {
 
   create(): void {
     const code = String(this.draft.code || '').trim().toUpperCase();
-    if (!code) { this.error = 'Kod kiritilmadi.'; return; }
-    this.saving = true;
+    const pct = Number(this.draft.discountPercent) || 0;
     this.error = '';
     this.okMsg = '';
+    if (!/^[A-Z0-9_-]{3,32}$/.test(code)) { this.error = 'Kod 3-32 ta lotin harf yoki raqamdan iborat bolsin.'; return; }
+    if (pct <= 0 || pct > 100) { this.error = 'Chegirma 1 dan 100 gacha bolishi kerak.'; return; }
+    this.saving = true;
     this.api.createPromo({
       code: code,
-      discountPercent: Number(this.draft.discountPercent) || 0,
-      maxUses: Number(this.draft.maxUses) || 0,
+      discountPercent: pct,
+      maxUses: Math.max(0, Number(this.draft.maxUses) || 0),
     }).subscribe({
       next: () => {
         this.saving = false;
@@ -101,9 +107,13 @@ export class AdminPromosComponent implements OnInit {
 
   del(p: any): void {
     if (!p || !p.id) { return; }
-    this.api.deletePromo(String(p.id)).subscribe({
-      next: () => { this.okMsg = 'Ochirildi.'; this.load(); },
-      error: () => { this.error = 'Ochirilmadi.'; },
+    this.dlg.confirm(p.code + ' promokodi ochirilsinmi?', { title: 'Promokodni ochirish', okText: 'Ochirish', danger: true }).then((ok) => {
+      if (!ok) { return; }
+      this.error = '';
+      this.api.deletePromo(String(p.id)).subscribe({
+        next: () => { this.okMsg = 'Ochirildi.'; this.load(); },
+        error: () => { this.error = 'Ochirilmadi.'; },
+      });
     });
   }
 }
