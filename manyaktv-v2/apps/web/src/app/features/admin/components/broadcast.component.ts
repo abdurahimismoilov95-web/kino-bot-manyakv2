@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { AdminApiService } from './admin-api.service';
 import { ApiService } from '../../../core/services/api.service';
@@ -29,6 +29,7 @@ interface BroadcastResult {
           <li>Xabar ro'yxatdan o'tgan foydalanuvchilarga yuboriladi</li>
           <li>Yuborish bir necha daqiqa davom etishi mumkin</li>
           <li>Kino yoki qism tanlansa, tugma web app'da aynan shu qismni ochadi. Sotib olganlar darhol ko'radi, olmaganlarga obuna sotib olish oynasi chiqadi</li>
+          <li>Rasm serverda topilmasa, xabar rasmsiz yuboriladi</li>
         </ul>
       </div>
 
@@ -79,7 +80,7 @@ interface BroadcastResult {
           <span>{{ uploading ? 'Yuklanmoqda...' : (imageUrl ? 'Rasm tayyor (almashtirish)' : 'Rasm tanlang') }}</span>
           <input type="file" accept="image/*" (change)="onImage($event)" hidden />
         </label>
-        <img *ngIf="imageUrl" class="prev" [src]="imageUrl" alt="" />
+        <img *ngIf="imageUrl" class="prev" [src]="imageUrl" alt="" (error)="onPreviewError()" />
 
         <div class="row2">
           <div>
@@ -143,12 +144,15 @@ interface BroadcastResult {
     .er { font-size: 0.8rem; color: #fca5a5; margin-top: 12px; }
   `],
 })
-export class AdminBroadcastComponent {
+export class AdminBroadcastComponent implements OnInit {
+  /** Tugmalar doim haqiqiy web app manzilini ochadi (admin qaysi domendan kirganidan qat'i nazar). */
+  private webOrigin = AdminApiService.defaultWebOrigin();
+
   title = '';
   text = '';
   imageUrl = '';
   buttonText = 'Veb appka kirish';
-  buttonUrl = window.location.origin;
+  buttonUrl = this.webOrigin;
   audience = 'all';
   sending = false;
   uploading = false;
@@ -165,7 +169,6 @@ export class AdminBroadcastComponent {
   private autoImage = false;
 
   private readonly origin = environment.apiUrl.replace(/\/api\/v1\/?$/, '');
-  private readonly webOrigin = window.location.origin;
   private readonly defaultButton = 'Veb appka kirish';
   private readonly watchButton = "Ko'rish";
 
@@ -175,6 +178,20 @@ export class AdminBroadcastComponent {
     private readonly http: HttpClient,
     private readonly dlg: DialogService,
   ) {}
+
+  ngOnInit(): void {
+    this.api.getSettings().subscribe({
+      next: (s) => {
+        const o = AdminApiService.cleanOrigin(s && s.webAppUrl);
+        if (!o || o === this.webOrigin) { return; }
+        const old = this.webOrigin;
+        this.webOrigin = o;
+        if (this.target) { this.applyTarget(); }
+        else if (!this.buttonUrl.trim() || this.buttonUrl === old) { this.buttonUrl = o; }
+      },
+      error: () => { /* standart manzil qoladi */ },
+    });
+  }
 
   private esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -205,6 +222,17 @@ export class AdminBroadcastComponent {
     if (this.audience === 'vip') { return 'faqat VIP obunachilarga'; }
     if (this.audience === 'free') { return 'faqat bepul foydalanuvchilarga'; }
     return 'barcha foydalanuvchilarga';
+  }
+
+  /** Ko'rinish rasmi ochilmasa (serverda fayl o'chib ketgan) - rasm olib tashlanadi. */
+  onPreviewError(): void {
+    if (!this.imageUrl) { return; }
+    const auto = this.autoImage;
+    this.imageUrl = '';
+    this.autoImage = false;
+    this.error = auto
+      ? 'Kontent posteri serverda topilmadi. Xabar rasmsiz yuboriladi yoki boshqa rasm yuklang.'
+      : 'Rasm ochilmadi. Boshqa rasm yuklang.';
   }
 
   findContent(): void {

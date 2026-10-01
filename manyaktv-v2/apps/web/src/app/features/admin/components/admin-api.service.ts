@@ -24,6 +24,28 @@ export class AdminApiService {
 
   constructor(private readonly http: HttpClient) {}
 
+  /**
+   * Telegram tugmalari uchun web app manzili.
+   * Tartib: sozlamalardagi webAppUrl -> environment.webAppUrl -> joriy manzil.
+   */
+  static cleanOrigin(u: string | null | undefined): string {
+    const s = String(u || '').trim().replace(/\/+$/, '');
+    return /^https:\/\/[^\s]+$/i.test(s) ? s : '';
+  }
+  static defaultWebOrigin(): string {
+    return AdminApiService.cleanOrigin(environment.webAppUrl) || window.location.origin;
+  }
+
+  // Kontent (admin uchun to'liq, video manzillari bilan)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getContentList(limit = 100): Observable<any> {
+    return this.http.get(this.base + '/content/admin/all', { params: { page: '1', limit: String(limit) } });
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getContentFull(id: string): Observable<any> {
+    return this.http.get(this.base + '/content/' + encodeURIComponent(id) + '/full');
+  }
+
   // Kataloglar (ekran bolimlari)
   getCatalogs(): Observable<Catalog[]> {
     return this.http.get<ListResponse<Catalog>>(this.base + '/admin/catalogs').pipe(map((r) => toList(r)));
