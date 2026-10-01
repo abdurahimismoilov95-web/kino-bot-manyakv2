@@ -111,7 +111,7 @@ export class BotService {
     });
   }
 
-  /** Asosiy menyu tugmalari */
+  /** Asosiy menyu tugmalari: Ochish, Tariflar, Profil */
   private mainKeyboard() {
     const base = this.webAppUrl;
     const rows: Array<Array<Record<string, unknown>>> = [];
@@ -119,16 +119,9 @@ export class BotService {
     rows.push([{ text: 'MANYAK TV ni ochish', web_app: { url: base } }]);
 
     rows.push([
-      { text: 'Qidirish', web_app: { url: base + '/search' } },
-      { text: 'Mini dramalar', web_app: { url: base + '/shorts' } },
-    ]);
-
-    rows.push([
       { text: 'Tariflar', web_app: { url: base + '/subscription' } },
       { text: 'Profil', web_app: { url: base + '/profile' } },
     ]);
-
-    rows.push([{ text: 'Yordam', callback_data: 'help' }]);
 
     return { inline_keyboard: rows };
   }
@@ -174,6 +167,7 @@ export class BotService {
 
       if (!chatId) return;
 
+      // Eski xabarlardagi "Yordam" tugmasi bosilsa ham javob beriladi
       if (data === 'help') {
         await this.sendMessage(
           chatId,
