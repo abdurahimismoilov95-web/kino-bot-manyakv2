@@ -58,6 +58,8 @@ interface UploadState { progress: number; status: string; name: string; }
         <button class="x" (click)="closeEditor()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         <h3 class="mh">{{ editing.id ? 'Kontentni Tahrirlash' : 'Yangi Kontent' }}</h3>
 
+        <div class="empty" *ngIf="editing.id && fullLoading">To'liq ma'lumot yuklanmoqda...</div>
+
         <label class="lb">Nomi</label>
         <input class="in" [(ngModel)]="editing.title" />
 
@@ -167,7 +169,7 @@ interface UploadState { progress: number; status: string; name: string; }
 
         <div class="foot">
           <button class="b b-gray" (click)="closeEditor()">Bekor</button>
-          <button class="b b-red" [disabled]="saving || uploading()" (click)="save()">
+          <button class="b b-red" [disabled]="saving || uploading() || fullLoading" (click)="save()">
             {{ saving ? 'Saqlanmoqda...' : (uploading() ? 'Yuklanmoqda...' : 'Saqlash') }}
           </button>
         </div>
@@ -270,12 +272,15 @@ export class AdminContentComponent implements OnInit {
   genresText = '';
   shouldBroadcast = false;
   saving = false;
+  fullLoading = false;
   formError = '';
   okMsg = '';
   error = '';
   up: Record<string, UploadState> = {};
 
   private readonly origin = environment.apiUrl.replace(/\/api\/v1\/?$/, '');
+  /** E'lon tugmasi doim haqiqiy web app manzilini ochadi. */
+  private webOrigin = AdminApiService.defaultWebOrigin();
 
   constructor(
     private readonly api: ApiService,
@@ -290,6 +295,13 @@ export class AdminContentComponent implements OnInit {
       next: (r: any) => { this.catalogs = (r && r.catalogs) || (Array.isArray(r) ? r : []); },
       error: () => { this.catalogs = []; },
     });
+    this.adminApi.getSettings().subscribe({
+      next: (s) => {
+        const o = AdminApiService.cleanOrigin(s && s.webAppUrl);
+        if (o) { this.webOrigin = o; }
+      },
+      error: () => { /* standart manzil qoladi */ },
+    });
   }
 
   abs(u: string | null | undefined): string {
@@ -303,8 +315,11 @@ export class AdminContentComponent implements OnInit {
 
   load(): void {
     this.loading = true;
-    this.api.getContent({ page: 1, limit: 100 }).subscribe({
-      next: (r: any) => { this.items = r.data || []; this.loading = false; },
+    this.adminApi.getContentList(100).subscribe({
+      next: (r: any) => {
+        this.items = (r && Array.isArray(r.data)) ? r.data : (Array.isArray(r) ? r : []);
+        this.loading = false;
+      },
       error: () => { this.loading = false; this.error = 'Kontent ro\'yxati yuklanmadi'; },
     });
   }
@@ -317,17 +332,28 @@ export class AdminContentComponent implements OnInit {
       this.editing = Object.assign({}, item);
       this.genresText = Array.isArray(item.genres) ? item.genres.join(', ') : (item.genres || '');
       this.editing.catalogId = item.catalogId || '';
-      this.api.getContentById(item.id).subscribe({
-        next: (full: any) => {
-          this.episodes = (full.episodes || [])
+      this.episodes = [];
+      this.fullLoading = true;
+      const id = item.id;
+      this.adminApi.getContentFull(id).subscribe({
+        next: (res: any) => {
+          this.fullLoading = false;
+          if (!this.editing || this.editing.id !== id) { return; }
+          const full: any = res && res.data && res.data.id ? res.data : res;
+          if (full && full.videoUrl) { this.editing.videoUrl = full.videoUrl; }
+          this.episodes = ((full && full.episodes) || [])
             .slice()
             .sort((a: any, b: any) => (a.seasonNumber - b.seasonNumber) || (a.episodeNumber - b.episodeNumber))
             .map((e: any) => Object.assign({}, e, { isFree: e.isFree === true }));
         },
-        error: () => { this.episodes = []; },
+        error: () => {
+          this.fullLoading = false;
+          this.episodes = [];
+          this.formError = 'To\'liq ma\'lumot yuklanmadi. Saqlashdan oldin oynani qayta oching.';
+        },
       });
-      this.episodes = [];
     } else {
+      this.fullLoading = false;
       this.editing = {
         title: '', originalTitle: '', type: 'movie', catalogId: '', posterUrl: '', videoUrl: '',
         description: '', year: new Date().getFullYear(), duration: '', rating: 7.5, price: 0,
@@ -341,6 +367,7 @@ export class AdminContentComponent implements OnInit {
   closeEditor(): void {
     this.editing = null;
     this.up = {};
+    this.fullLoading = false;
   }
 
   onCatalog(id: string): void {
@@ -417,6 +444,7 @@ export class AdminContentComponent implements OnInit {
   save(): void {
     const e = this.editing;
     this.formError = '';
+    if (this.fullLoading) { this.formError = 'Ma\'lumot hali yuklanmoqda, biroz kuting'; return; }
     if (!e.title || !String(e.title).trim()) { this.formError = 'Kontent nomini kiriting'; return; }
     if (!e.posterUrl || !String(e.posterUrl).trim()) { this.formError = 'Poster rasmini yuklang'; return; }
     if (e.type === 'movie' && (!e.videoUrl || !String(e.videoUrl).trim())) { this.formError = 'Video faylni yuklang'; return; }
@@ -505,7 +533,7 @@ export class AdminContentComponent implements OnInit {
       text: text,
       photoUrl: this.abs(c.posterUrl),
       buttonText: 'Tomosha qilish',
-      buttonUrl: window.location.origin + '/watch/' + c.id,
+      buttonUrl: this.webOrigin + '/?open=' + encodeURIComponent(c.id),
       audience: 'all',
     }).subscribe({
       next: (r: any) => { this.okMsg = 'E\'lon yuborilmoqda (' + ((r && r.total) || 0) + ' foydalanuvchi)'; },
