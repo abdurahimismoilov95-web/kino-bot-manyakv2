@@ -81,3 +81,85 @@ export interface AuditLog {
 }
 
 export type MoneyValue = number | string | null | undefined;
+
+/* ------------------------------------------------------------------ */
+/* Kontent, epizod, chek va foydalanuvchi (API entity'lariga mos)       */
+/* ------------------------------------------------------------------ */
+
+export type UserRole = 'user' | 'admin' | 'super_admin';
+
+/** Foydalanuvchi (API: users jadvali). Sanalar JSON'da satr bo'lib keladi. */
+export interface AppUser {
+  id: Id;
+  telegramId: string;
+  firstName: string;
+  lastName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
+  role: UserRole;
+  isVip: boolean;
+  vipExpiresAt?: string | null;
+  subscriptionPlanId?: string | null;
+  isPhoneVerified?: boolean;
+  phoneNumber?: string | null;
+  isBanned: boolean;
+  banReason?: string | null;
+  bannedAt?: string | null;
+  createdAt?: string;
+  lastSeenAt?: string | null;
+}
+
+/** Serial qismi (API: episodes jadvali). */
+export interface Episode {
+  id: Id;
+  contentId: Id;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  videoUrl?: string | null;
+  hlsPath?: string | null;
+  transcodeStatus?: string;
+  availableQualities?: string[];
+  duration?: string | null;
+  isFree: boolean;
+  viewsCount?: number;
+  thumbnailUrl?: string | null;
+  createdAt?: string;
+}
+
+/** Film yoki serial (API: contents jadvali). Qo'shimcha maydonlar ixtiyoriy. */
+export interface Content {
+  id: Id;
+  title: string;
+  description?: string | null;
+  type?: string;
+  posterUrl?: string | null;
+  backdropUrl?: string | null;
+  videoUrl?: string | null;
+  hlsPath?: string | null;
+  isPremium: boolean;
+  genres?: string[];
+  year?: number | null;
+  rating?: number | null;
+  viewsCount?: number;
+  episodes?: Episode[];
+  createdAt?: string;
+}
+
+export type ReceiptStatus = 'pending' | 'approved' | 'rejected';
+
+/** To'lov cheki (API: receipts jadvali). */
+export interface Receipt {
+  id: Id;
+  userId: Id;
+  user?: Pick<AppUser, 'id' | 'firstName' | 'lastName' | 'username' | 'telegramId'> | null;
+  planId?: Id | null;
+  plan?: Plan | null;
+  contentId?: Id | null;
+  amount?: MoneyValue;
+  imageUrl?: string | null;
+  status: ReceiptStatus;
+  rejectReason?: string | null;
+  createdAt?: string;
+  reviewedAt?: string | null;
+}
