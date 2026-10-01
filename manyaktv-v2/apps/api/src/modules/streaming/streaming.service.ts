@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { HlsAuthCacheService } from './hls-auth.cache';
 import { User } from '../users/entities/user.entity';
 import { Content } from '../content/entities/content.entity';
+import { Episode } from '../content/entities/episode.entity';
 
 /**
  * Imzo siri. Hammaga ma'lum standart qiymat ishlatilmaydi:
@@ -25,25 +26,56 @@ export class StreamingService {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Content) private contentRepo: Repository<Content>,
+    @InjectRepository(Episode) private episodeRepo: Repository<Episode>,
     private readonly hlsCache: HlsAuthCacheService,
   ) {}
 
-  private async checkAccess(contentId: string, userId: string): Promise<void> {
-    const content = await this.contentRepo.findOne({ where: { id: contentId } });
-    if (!content) throw new UnauthorizedException('Kontent topilmadi');
+  /** Foydalanuvchini tekshiradi: mavjud, bloklanmagan. */
+  private async loadUser(userId: string): Promise<User> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('Foydalanuvchi topilmadi');
+    if (user.isBanned) throw new ForbiddenException('Akkaunt bloklangan');
+    return user;
+  }
 
-    if (user.isBanned) {
-      throw new UnauthorizedException('Akkaunt bloklangan');
+  /** VIP faol (muddati o'tmagan) yoki admin bo'lsa true. */
+  private hasVip(user: User): boolean {
+    return user.isAdmin || user.isVipActive;
+  }
+
+  private async checkContentAccess(contentId: string, userId: string): Promise<void> {
+    const content = await this.contentRepo.findOne({ where: { id: contentId } });
+    if (!content) throw new NotFoundException('Kontent topilmadi');
+    const user = await this.loadUser(userId);
+
+    if (content.isPremium && !this.hasVip(user)) {
+      throw new ForbiddenException('VIP obuna kerak');
     }
-    if (content.isPremium && !user.isVip) {
-      throw new UnauthorizedException('VIP obuna kerak');
+  }
+
+  /**
+   * Epizod uchun server tomonidagi tekshiruv:
+   *  - epizod shu kontentga tegishli bo'lishi shart;
+   *  - bepul epizod hammaga ochiq (bloklanmaganlarga);
+   *  - pullik kontentdagi pullik epizod faqat faol VIP yoki adminga.
+   */
+  private async checkEpisodeAccess(contentId: string, episodeId: string, userId: string): Promise<void> {
+    const episode = await this.episodeRepo.findOne({ where: { id: episodeId } });
+    if (!episode || episode.contentId !== contentId) {
+      throw new NotFoundException('Epizod topilmadi');
+    }
+    const content = await this.contentRepo.findOne({ where: { id: contentId } });
+    if (!content) throw new NotFoundException('Kontent topilmadi');
+    const user = await this.loadUser(userId);
+
+    if (episode.isFree) return;
+    if (content.isPremium && !this.hasVip(user)) {
+      throw new ForbiddenException('Bu qism uchun VIP obuna kerak');
     }
   }
 
   async getContentStreamUrl(contentId: string, userId: string) {
-    await this.checkAccess(contentId, userId);
+    await this.checkContentAccess(contentId, userId);
 
     const { token, exp } = this.generateToken(userId);
     const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}`;
@@ -57,7 +89,7 @@ export class StreamingService {
   }
 
   async getEpisodeStreamUrl(contentId: string, episodeId: string, userId: string) {
-    await this.checkAccess(contentId, userId);
+    await this.checkEpisodeAccess(contentId, episodeId, userId);
 
     const { token, exp } = this.generateToken(userId);
     const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}/episodes/${encodeURIComponent(episodeId)}`;
