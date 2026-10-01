@@ -1,7 +1,11 @@
 import { registerAs } from '@nestjs/config';
 
+// Render har doim RENDER=true beradi: NODE_ENV qo'yilmagan bo'lsa ham production deb hisoblaymiz.
+const nodeEnv = process.env.NODE_ENV || (process.env.RENDER ? 'production' : 'development');
+
 export default registerAs('app', () => ({
-  nodeEnv:     process.env.NODE_ENV || 'development',
+  nodeEnv,
+  isProd: nodeEnv === 'production',
   port:        parseInt(process.env.PORT || '3001', 10),
   appUrl:      process.env.APP_URL || 'http://localhost:3001',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:4200',

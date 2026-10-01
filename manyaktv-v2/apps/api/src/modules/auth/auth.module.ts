@@ -17,7 +17,11 @@ import { User } from '../users/entities/user.entity';
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('jwt.secret'),
         signOptions: {
-          expiresIn: config.get<string>('jwt.expiresIn', '30d'),
+          algorithm: 'HS256' as const,
+          expiresIn: config.get<string>('jwt.expiresIn', '7d'),
+        },
+        verifyOptions: {
+          algorithms: ['HS256' as const],
         },
       }),
       inject: [ConfigService],

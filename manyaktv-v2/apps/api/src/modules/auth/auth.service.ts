@@ -17,6 +17,9 @@ export interface TelegramWebAppData {
   hash: string;
 }
 
+/** Admin brauzer kirishi uchun sirning minimal uzunligi */
+const MIN_ADMIN_SECRET_LEN = 16;
+
 @Injectable()
 export class AuthService {
   private readonly botToken: string;
@@ -92,20 +95,21 @@ export class AuthService {
       if (!initData || initData.length > 4096 || !this.botToken) return null;
       const params = new URLSearchParams(initData);
       const hash = params.get('hash');
-      if (!hash) return null;
+      if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) return null;
       params.delete('hash');
       const dataCheckString = [...params.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => `${k}=${v}`).join('\n');
       const secretKey = crypto.createHmac('sha256', 'WebAppData').update(this.botToken).digest();
       const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-      if (!this.safeEqual(expectedHash, hash)) return null;
+      if (!this.safeEqual(expectedHash, hash.toLowerCase())) return null;
+      // initData faqat 5 daqiqa amal qiladi (eski/o'g'irlangan ma'lumotni qayta ishlatib bo'lmaydi)
       const authDate = parseInt(params.get('auth_date') || '0', 10);
       const nowSec = Math.floor(Date.now() / 1000);
       if (!authDate || nowSec - authDate > 300 || authDate - nowSec > 60) return null;
       const userParam = params.get('user');
       if (!userParam) return null;
-      const parsed = JSON.parse(decodeURIComponent(userParam)) as TelegramWebAppData;
+      const parsed = JSON.parse(userParam) as TelegramWebAppData;
       if (!parsed || !parsed.id) return null;
       return parsed;
     } catch { return null; }
@@ -123,7 +127,10 @@ export class AuthService {
 
   async adminBrowserLogin(dto: { telegramId: string; secret: string }): Promise<{ token: string; user: User }> {
     const expectedSecret = this.config.get<string>('app.adminBrowserSecret', '');
-    if (!expectedSecret || !this.safeEqual(String(dto.secret || ''), expectedSecret))
+    // Sir qo'yilmagan yoki juda qisqa bo'lsa, brauzer orqali kirish butunlay o'chiq
+    if (!expectedSecret || expectedSecret.length < MIN_ADMIN_SECRET_LEN)
+      throw new UnauthorizedException('Invalid credentials');
+    if (!this.safeEqual(String(dto.secret || ''), expectedSecret))
       throw new UnauthorizedException('Invalid credentials');
 
     const user = await this.userRepo.findOne({ where: { telegramId: String(dto.telegramId || '') } });
