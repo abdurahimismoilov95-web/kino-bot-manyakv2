@@ -73,9 +73,10 @@ import { environment } from '../../../environments/environment';
             <div class="pl-lock-ico">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
-            <h3>Ushbu kontent himoyalangan!</h3>
-            <p>Korish uchun VIP obuna oling yoki alohida xarid qiling.</p>
-            <button class="pl-lock-btn" (click)="goPlans(); $event.stopPropagation()">Tariflarni korish</button>
+            <h3>Obuna sotib oling</h3>
+            <p>{{ lockText() }}</p>
+            <button class="pl-lock-btn" (click)="goPlans(); $event.stopPropagation()">Obuna sotib olish</button>
+            <button class="pl-lock-alt" *ngIf="hasFreeEpisode()" (click)="openFirstFree(); $event.stopPropagation()">Bepul qismni ko'rish</button>
           </div>
         </div>
 
@@ -245,6 +246,7 @@ import { environment } from '../../../environments/environment';
     .pl-locked-card h3 { margin: 0 0 4px; font-size: 17px; font-weight: 900; color: #fff; }
     .pl-locked-card p { margin: 0 0 14px; font-size: 12px; color: #a1a1aa; line-height: 1.5; }
     .pl-lock-btn { width: 100%; padding: 11px; border-radius: 12px; border: none; cursor: pointer; background: #dc2626; color: #fff; font-weight: 800; font-size: 13px; }
+    .pl-lock-alt { width: 100%; margin-top: 8px; padding: 10px; border-radius: 12px; border: 1px solid #3f3f46; cursor: pointer; background: transparent; color: #d4d4d8; font-weight: 800; font-size: 12px; }
     .pl-ctrl { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; padding: 12px; background: linear-gradient(to top, #000, rgba(0,0,0,0.8), transparent); transition: opacity 0.3s; }
     .pl-seekrow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .pl-t { font-size: 10px; font-family: monospace; color: #d4d4d8; }
@@ -349,13 +351,16 @@ export class WatchComponent implements OnInit, OnDestroy {
     const u: any = this.storage.getUser();
     if (u) {
       this.uid = String(u.id || u.telegramId || '');
-      this.isVip = !!u.isVip;
+      const exp = u.vipExpiresAt ? new Date(u.vipExpiresAt).getTime() : 0;
+      this.isVip = !!u.isVip && (!exp || exp > Date.now());
       this.isAdmin = u.role === 'admin' || u.role === 'super_admin';
       this.showWm = u.role !== 'super_admin' && !!this.uid;
     }
 
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.router.navigate(['/']); return; }
+    /** Bot xabaridagi tugmadan: /watch/<id>?ep=<qismId yoki qism raqami> */
+    const wantEp = (this.route.snapshot.queryParamMap.get('ep') || '').trim();
 
     this.api.getContentById(id).subscribe({
       next: (r: any) => {
@@ -367,11 +372,17 @@ export class WatchComponent implements OnInit, OnDestroy {
         });
         this.isFav = !!(this.content && this.content.isFavorite);
         if (this.episodes.length) {
-          this.selectEpisode(this.episodes[0]);
+          let first: any = this.episodes[0];
+          if (wantEp) {
+            const hit = this.episodes.find((e: any) => String(e.id) === wantEp)
+              || this.episodes.find((e: any) => String(e.episodeNumber) === wantEp);
+            if (hit) { first = hit; }
+          }
+          this.selectEpisode(first);
         } else {
           this.activeEp = null;
           this.startAt = Number(this.content.watchProgress || 0);
-          if (this.canWatch(null)) { this.load(); } else { this.locked = true; this.buffering = false; }
+          if (this.canWatch(null)) { this.load(); } else { this.lockNow(); }
         }
       },
       error: () => { this.buffering = false; this.errorText = 'Kontent yuklanmadi.'; },
@@ -401,6 +412,33 @@ export class WatchComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  lockText(): string {
+    const ep = this.activeEp;
+    const what = ep ? ((ep.episodeNumber || (this.curIdx + 1)) + '-qismni') : 'bu kontentni';
+    return 'Siz hali obuna sotib olmagansiz. ' + what + ' ko\'rish uchun obuna sotib oling.';
+  }
+
+  hasFreeEpisode(): boolean {
+    return this.episodes.some((e: any) => e.isFree && (!this.activeEp || e.id !== this.activeEp.id));
+  }
+
+  openFirstFree(): void {
+    const f = this.episodes.find((e: any) => e.isFree);
+    if (f) { this.selectEpisode(f); }
+  }
+
+  private lockNow(): void {
+    this.destroyHls();
+    this.locked = true;
+    this.errorText = '';
+    this.playing = false;
+    this.buffering = false;
+    const v = this.videoRef.nativeElement;
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+  }
+
   pick(ep: any): void {
     this.sheet = false;
     this.selectEpisode(ep);
@@ -412,11 +450,7 @@ export class WatchComponent implements OnInit, OnDestroy {
     this.startAt = Number(ep.watchProgress || 0);
     this.errorText = '';
     if (!this.canWatch(ep)) {
-      this.locked = true;
-      const v = this.videoRef.nativeElement;
-      v.pause();
-      this.playing = false;
-      this.buffering = false;
+      this.lockNow();
       return;
     }
     this.locked = false;
@@ -508,9 +542,11 @@ export class WatchComponent implements OnInit, OnDestroy {
         else if (direct) { this.playDirect(direct); }
         else { this.fail('Video manzili topilmadi.'); }
       },
-      error: () => {
+      error: (e: any) => {
+        /* Server "obuna kerak" dedi: sotib olish oynasini ko'rsatamiz */
+        if (e && e.status === 403) { this.lockNow(); return; }
         if (direct) { this.playDirect(direct); }
-        else { this.fail('Video ochilmadi. Obuna yoki kirish huquqini tekshiring.'); }
+        else { this.fail('Video ochilmadi. Keyinroq qayta urinib koring.'); }
       },
     });
   }
@@ -570,6 +606,7 @@ export class WatchComponent implements OnInit, OnDestroy {
   }
 
   onVideoError(): void {
+    if (this.locked) { return; }
     const v = this.videoRef.nativeElement;
     if (!v.getAttribute('src') && !this.hls) { return; }
     if (this.hls) { return; }
@@ -618,6 +655,7 @@ export class WatchComponent implements OnInit, OnDestroy {
   }
 
   togglePlay(): void {
+    if (this.locked) { return; }
     const v = this.videoRef.nativeElement;
     if (v.paused) { v.play().catch(() => { /* noop */ }); this.wake(); }
     else { v.pause(); }
