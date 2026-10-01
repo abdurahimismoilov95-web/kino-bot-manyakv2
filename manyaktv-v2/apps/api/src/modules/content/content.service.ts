@@ -26,6 +26,24 @@ export class ContentService {
     @InjectRepository(Favorite) private readonly favoriteRepo: Repository<Favorite>,
   ) {}
 
+  /**
+   * Ochiq javob uchun: pullik kontent va pullik qismlarning to'g'ridan-to'g'ri
+   * video manzili olib tashlanadi. Manzil faqat /streaming orqali, ruxsat
+   * tekshirilgandan keyin beriladi. Bepul qismlar o'zgarmaydi.
+   */
+  publicView(c: Content | null | undefined): Content | null | undefined {
+    if (!c) return c;
+    if (c.isPremium || Number(c.price || 0) > 0) {
+      c.videoUrl = null;
+    }
+    if (Array.isArray(c.episodes)) {
+      for (const e of c.episodes) {
+        if (!e.isFree) e.videoUrl = null;
+      }
+    }
+    return c;
+  }
+
   async findAll(q: ContentQuery = {}) {
     const { page = 1, limit = 20, search, type, genre, isPremium, isTrending, isFeatured } = q;
     const qb = this.contentRepo

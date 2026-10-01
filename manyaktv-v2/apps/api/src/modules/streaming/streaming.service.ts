@@ -6,6 +6,7 @@ import { HlsAuthCacheService } from './hls-auth.cache';
 import { User } from '../users/entities/user.entity';
 import { Content } from '../content/entities/content.entity';
 import { Episode } from '../content/entities/episode.entity';
+import { Receipt, ReceiptStatus, ReceiptType } from '../payment/entities/receipt.entity';
 
 /**
  * Imzo siri. Hammaga ma'lum standart qiymat ishlatilmaydi:
@@ -15,6 +16,14 @@ const SIGNING_SECRET =
   process.env.FILE_SIGNING_SECRET && process.env.FILE_SIGNING_SECRET.length >= 16
     ? process.env.FILE_SIGNING_SECRET
     : randomBytes(32).toString('hex');
+
+export interface StreamInfo {
+  masterPlaylist: string | null;
+  directUrl: string | null;
+  availableQualities: string[];
+  defaultQuality: string;
+  tokenExpiry: number;
+}
 
 @Injectable()
 export class StreamingService {
@@ -27,6 +36,7 @@ export class StreamingService {
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Content) private contentRepo: Repository<Content>,
     @InjectRepository(Episode) private episodeRepo: Repository<Episode>,
+    @InjectRepository(Receipt) private receiptRepo: Repository<Receipt>,
     private readonly hlsCache: HlsAuthCacheService,
   ) {}
 
@@ -38,64 +48,85 @@ export class StreamingService {
     return user;
   }
 
-  /** VIP faol (muddati o'tmagan) yoki admin bo'lsa true. */
-  private hasVip(user: User): boolean {
-    return user.isAdmin || user.isVipActive;
+  /** Kontent pullikmi: faqat VIP yoki narxi bor. */
+  private needsPayment(content: Content): boolean {
+    return !!content.isPremium || Number(content.price || 0) > 0;
   }
 
-  private async checkContentAccess(contentId: string, userId: string): Promise<void> {
+  /** Shu kontent alohida sotib olingan va chek tasdiqlanganmi. */
+  private async hasPurchased(userId: string, contentId: string): Promise<boolean> {
+    const count = await this.receiptRepo.count({
+      where: {
+        userId,
+        contentId,
+        type: ReceiptType.SINGLE_CONTENT,
+        status: ReceiptStatus.APPROVED,
+      },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Server tomonidagi yagona ruxsat qoidasi:
+   *  - admin hammasini ko'radi;
+   *  - bepul kontent hammaga ochiq;
+   *  - VIP'ga kiradigan kontentni faol VIP ko'radi;
+   *  - alohida sotib olingan kontentni xaridor ko'radi.
+   */
+  private async canAccess(user: User, content: Content): Promise<boolean> {
+    if (user.isAdmin) return true;
+    if (!this.needsPayment(content)) return true;
+    if (content.isVipIncluded !== false && user.isVipActive) return true;
+    return this.hasPurchased(user.id, content.id);
+  }
+
+  private async loadContent(contentId: string): Promise<Content> {
     const content = await this.contentRepo.findOne({ where: { id: contentId } });
     if (!content) throw new NotFoundException('Kontent topilmadi');
-    const user = await this.loadUser(userId);
+    return content;
+  }
 
-    if (content.isPremium && !this.hasVip(user)) {
-      throw new ForbiddenException('VIP obuna kerak');
+  async getContentStreamUrl(contentId: string, userId: string): Promise<StreamInfo> {
+    const content = await this.loadContent(contentId);
+    const user = await this.loadUser(userId);
+    if (!(await this.canAccess(user, content))) {
+      throw new ForbiddenException('Obuna kerak');
     }
+    const base = content.hlsPath ? `${this.hlsBase}/${encodeURIComponent(contentId)}` : null;
+    return this.buildStream(userId, base, content.videoUrl);
   }
 
   /**
    * Epizod uchun server tomonidagi tekshiruv:
    *  - epizod shu kontentga tegishli bo'lishi shart;
    *  - bepul epizod hammaga ochiq (bloklanmaganlarga);
-   *  - pullik kontentdagi pullik epizod faqat faol VIP yoki adminga.
+   *  - pullik epizod faqat ruxsati borlarga (VIP, xaridor, admin).
    */
-  private async checkEpisodeAccess(contentId: string, episodeId: string, userId: string): Promise<void> {
+  async getEpisodeStreamUrl(contentId: string, episodeId: string, userId: string): Promise<StreamInfo> {
     const episode = await this.episodeRepo.findOne({ where: { id: episodeId } });
     if (!episode || episode.contentId !== contentId) {
       throw new NotFoundException('Epizod topilmadi');
     }
-    const content = await this.contentRepo.findOne({ where: { id: contentId } });
-    if (!content) throw new NotFoundException('Kontent topilmadi');
+    const content = await this.loadContent(contentId);
     const user = await this.loadUser(userId);
-
-    if (episode.isFree) return;
-    if (content.isPremium && !this.hasVip(user)) {
-      throw new ForbiddenException('Bu qism uchun VIP obuna kerak');
+    if (!episode.isFree && !(await this.canAccess(user, content))) {
+      throw new ForbiddenException('Bu qism uchun obuna kerak');
     }
+    const epHls = (episode as unknown as { hlsPath?: string | null }).hlsPath;
+    const base = epHls
+      ? `${this.hlsBase}/${encodeURIComponent(contentId)}/episodes/${encodeURIComponent(episodeId)}`
+      : null;
+    return this.buildStream(userId, base, episode.videoUrl || null);
   }
 
-  async getContentStreamUrl(contentId: string, userId: string) {
-    await this.checkContentAccess(contentId, userId);
-
+  /** Video manzili faqat ruxsat tekshirilgandan keyin qaytariladi. */
+  private buildStream(userId: string, hlsBaseUrl: string | null, direct: string | null): StreamInfo {
     const { token, exp } = this.generateToken(userId);
-    const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}`;
-
     return {
-      masterPlaylist: `${baseUrl}/master.m3u8?uid=${encodeURIComponent(userId)}&exp=${exp}&sig=${token}`,
-      availableQualities: ['480p', '720p', '1080p'],
-      defaultQuality: '720p',
-      tokenExpiry: exp,
-    };
-  }
-
-  async getEpisodeStreamUrl(contentId: string, episodeId: string, userId: string) {
-    await this.checkEpisodeAccess(contentId, episodeId, userId);
-
-    const { token, exp } = this.generateToken(userId);
-    const baseUrl = `${this.hlsBase}/${encodeURIComponent(contentId)}/episodes/${encodeURIComponent(episodeId)}`;
-
-    return {
-      masterPlaylist: `${baseUrl}/master.m3u8?uid=${encodeURIComponent(userId)}&exp=${exp}&sig=${token}`,
+      masterPlaylist: hlsBaseUrl
+        ? `${hlsBaseUrl}/master.m3u8?uid=${encodeURIComponent(userId)}&exp=${exp}&sig=${token}`
+        : null,
+      directUrl: direct || null,
       availableQualities: ['480p', '720p', '1080p'],
       defaultQuality: '720p',
       tokenExpiry: exp,

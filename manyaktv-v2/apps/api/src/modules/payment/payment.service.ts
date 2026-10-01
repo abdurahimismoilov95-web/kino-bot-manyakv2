@@ -73,6 +73,12 @@ export class PaymentService {
     });
   }
 
+  /**
+   * Chekni tasdiqlash.
+   *  - Obuna cheki: foydalanuvchiga tarif muddaticha VIP beriladi.
+   *  - Bitta kontent cheki: VIP berilmaydi, faqat shu kontent ochiladi
+   *    (ruxsat streaming xizmatida tasdiqlangan chek bo'yicha tekshiriladi).
+   */
   async approveReceipt(receiptId: string, adminId: string): Promise<Receipt> {
     const receipt = await this.receiptRepo.findOne({
       where: { id: receiptId },
@@ -83,13 +89,16 @@ export class PaymentService {
       throw new BadRequestException('Receipt is not in pending state');
     }
 
-    let durationDays = 30;
-    if (receipt.planId) {
-      const plan = await this.subscriptionService.findPlanById(receipt.planId);
-      if (plan) durationDays = plan.durationDays;
+    const isSingle = receipt.type === ReceiptType.SINGLE_CONTENT && !!receipt.contentId;
+    let durationDays = 0;
+    if (!isSingle) {
+      durationDays = 30;
+      if (receipt.planId) {
+        const plan = await this.subscriptionService.findPlanById(receipt.planId);
+        if (plan) durationDays = plan.durationDays;
+      }
+      await this.usersService.grantVip(receipt.userId, durationDays);
     }
-
-    await this.usersService.grantVip(receipt.userId, durationDays);
 
     receipt.status = ReceiptStatus.APPROVED;
     receipt.reviewedBy = adminId;
@@ -100,6 +109,8 @@ export class PaymentService {
       receiptId,
       planName: receipt.planName,
       durationDays,
+      contentId: isSingle ? receipt.contentId : null,
+      contentTitle: isSingle ? receipt.contentTitle : null,
     });
 
     return saved;

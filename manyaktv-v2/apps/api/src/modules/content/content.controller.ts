@@ -12,6 +12,11 @@ import { User } from '../users/entities/user.entity';
 import { ContentType } from './entities/content.entity';
 import { Public } from '../../common/decorators/public.decorator';
 
+/**
+ * Ochiq (public) javoblarda pullik videolarning manzili yashiriladi.
+ * Video manzili faqat /streaming orqali, ruxsat tekshirilgandan keyin beriladi.
+ * Admin panel to'liq ma'lumotni /content/admin/all va /content/:id/full dan oladi.
+ */
 @ApiTags('Content')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -19,42 +24,70 @@ import { Public } from '../../common/decorators/public.decorator';
 export class ContentController {
   constructor(private readonly contentService: ContentService) {}
 
+  private clampLimit(v: unknown, def: number, max: number): number {
+    const n = Math.floor(Number(v) || def);
+    return Math.min(Math.max(n, 1), max);
+  }
+
   @Get('featured')
   @Public()
-  getFeatured() {
-    return this.contentService.getFeatured();
+  async getFeatured() {
+    const list = await this.contentService.getFeatured();
+    list.forEach((c) => this.contentService.publicView(c));
+    return list;
   }
 
   @Get('trending')
   @Public()
-  getTrending() {
-    return this.contentService.getTrending();
+  async getTrending() {
+    const list = await this.contentService.getTrending();
+    list.forEach((c) => this.contentService.publicView(c));
+    return list;
   }
 
   @Get('history/mine')
   @ApiOperation({ summary: 'Kuzatish tarixi' })
-  getHistory(
+  async getHistory(
     @CurrentUser() user: User,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.contentService.getWatchHistory(user.id, +page, +limit);
+    const r = await this.contentService.getWatchHistory(user.id, +page || 1, this.clampLimit(limit, 20, 100));
+    r.data.forEach((h) => this.contentService.publicView(h.content));
+    return r;
   }
 
   @Get('favorites/mine')
   @ApiOperation({ summary: 'Sevimlilar royxati' })
-  getFavorites(
+  async getFavorites(
     @CurrentUser() user: User,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    return this.contentService.getFavorites(user.id, +page, +limit);
+    const r = await this.contentService.getFavorites(user.id, +page || 1, this.clampLimit(limit, 20, 100));
+    r.data.forEach((f) => this.contentService.publicView(f.content));
+    return r;
+  }
+
+  @Get('admin/all')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Admin: to\'liq kontent ro\'yxati (video manzillari bilan)' })
+  findAllAdmin(
+    @Query('page') page = 1,
+    @Query('limit') limit = 100,
+    @Query('search') search?: string,
+  ) {
+    return this.contentService.findAll({
+      page: +page || 1,
+      limit: this.clampLimit(limit, 100, 200),
+      search,
+    });
   }
 
   @Get()
   @Public()
   @ApiOperation({ summary: 'Kino/seriallar royxati' })
-  findAll(
+  async findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('search') search?: string,
@@ -64,9 +97,9 @@ export class ContentController {
     @Query('isTrending') isTrending?: string,
     @Query('isFeatured') isFeatured?: string,
   ) {
-    return this.contentService.findAll({
-      page: +page,
-      limit: +limit,
+    const r = await this.contentService.findAll({
+      page: +page || 1,
+      limit: this.clampLimit(limit, 20, 100),
       search,
       type,
       genre,
@@ -74,12 +107,23 @@ export class ContentController {
       isTrending: isTrending === 'true' ? true : undefined,
       isFeatured: isFeatured === 'true' ? true : undefined,
     });
+    r.data.forEach((c) => this.contentService.publicView(c));
+    return r;
+  }
+
+  @Get(':id/full')
+  @AdminOnly()
+  @ApiOperation({ summary: 'Admin: kontent to\'liq (video manzillari bilan)' })
+  findOneFull(@Param('id') id: string) {
+    return this.contentService.findById(id);
   }
 
   @Get(':id')
   @Public()
-  findOne(@Param('id') id: string) {
-    return this.contentService.findById(id);
+  async findOne(@Param('id') id: string) {
+    const c = await this.contentService.findById(id);
+    this.contentService.publicView(c);
+    return c;
   }
 
   @Post()
